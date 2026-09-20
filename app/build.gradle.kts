@@ -58,4 +58,5 @@ dependencies {
     implementation(libs.firebase.firestore)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.coil.compose)
 }

@@ -20,6 +20,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 import com.example.alquigo.data.model.Property
 import com.example.alquigo.data.repository.PropertyRepository
 import kotlinx.coroutines.launch
@@ -48,7 +50,7 @@ fun AddPropertyScreen(onNavigateBack: () -> Unit) {
     ) { uri: Uri? ->
         if (uri != null) {
             imageUri = uri
-            Toast.makeText(context, "Imagen seleccionada (Simulación)", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Imagen seleccionada", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -88,23 +90,12 @@ fun AddPropertyScreen(onNavigateBack: () -> Unit) {
                     contentAlignment = Alignment.Center
                 ) {
                     if (imageUri != null) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Text(
-                                text = "🏠",
-                                style = MaterialTheme.typography.displayMedium
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "¡Imagen Simulada Seleccionada!",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                textAlign = TextAlign.Center
-                            )
-                        }
+                        AsyncImage(
+                            model = imageUri,
+                            contentDescription = "Foto de la propiedad",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
                     } else {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -117,7 +108,7 @@ fun AddPropertyScreen(onNavigateBack: () -> Unit) {
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Simular Foto (Tocar para elegir de Galería)",
+                                text = "(Tocar para elegir de Galería)",
                                 style = MaterialTheme.typography.bodyMedium,
                                 textAlign = TextAlign.Center
                             )
