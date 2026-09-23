@@ -22,6 +22,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.modifier.modifierLocalConsumer
 import com.example.alquigo.data.model.Property
 import com.example.alquigo.data.repository.PropertyRepository
 import kotlinx.coroutines.launch
@@ -194,15 +195,17 @@ fun AddPropertyScreen(onNavigateBack: () -> Unit) {
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-
-            // Botón de Registro Real
+// Botón de Registro Real
             Button(
                 onClick = {
+                    val precioDouble = precio.toDoubleOrNull()
+
                     if (titulo.isBlank() || descripcion.isBlank() || precio.isBlank() || direccion.isBlank()) {
                         Toast.makeText(context, "Por favor complete todos los campos obligatorios", Toast.LENGTH_SHORT).show()
+                    } else if (precioDouble == null || precioDouble <= 0) {
+                        Toast.makeText(context, "El precio por mes debe ser un número válido mayor a cero", Toast.LENGTH_SHORT).show()
                     } else {
                         isLoading = true
-                        val precioDouble = precio.toDoubleOrNull() ?: 0.0
                         val nuevaPropiedad = Property(
                             titulo = titulo,
                             descripcion = descripcion,
@@ -211,7 +214,7 @@ fun AddPropertyScreen(onNavigateBack: () -> Unit) {
                             tipo = tipo,
                             imagenUri = imageUri?.toString() ?: ""
                         )
-                        
+
                         scope.launch {
                             repository.saveProperty(nuevaPropiedad).fold(
                                 onSuccess = {
@@ -237,6 +240,25 @@ fun AddPropertyScreen(onNavigateBack: () -> Unit) {
                 } else {
                     Text("Registrar Propiedad", style = MaterialTheme.typography.titleMedium)
                 }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            // boton para limpiar el formulario
+            OutlinedButton(
+                onClick = {
+                    titulo =""
+                    descripcion = ""
+                    precio = ""
+                    direccion = ""
+                    tipo = "Casa"
+                    imageUri =null
+                    Toast.makeText(context, "Formulario limpiado", Toast.LENGTH_SHORT).show()
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                enabled = !isLoading
+            ){
+                Text("Limpiar Formulario",style = MaterialTheme.typography.titleMedium)
             }
         }
     }

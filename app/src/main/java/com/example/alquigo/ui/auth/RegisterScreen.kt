@@ -45,6 +45,7 @@ fun RegisterScreen(
     val state by viewModel.authState
     val primaryRed = Color(0xFFDC2626)
 
+
     Box(
         modifier = Modifier
             .fillMaxSize()

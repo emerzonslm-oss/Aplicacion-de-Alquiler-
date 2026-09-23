@@ -62,7 +62,15 @@ class AuthViewModel(private val repository: AuthRepository = AuthRepository()) :
             _authState.value = AuthState.Error("Formato de correo inválido")
             return
         }
-
+        if (contrasena.length <6){
+            _authState.value = AuthState.Error("La contraseña es muy pequeña")
+            return
+        }
+        if (telefono.length !=9) {
+            _authState.value =
+                AuthState.Error("La cantidad de numeros del telefono no es la suficiente ")
+            return
+        }
         viewModelScope.launch {
             _authState.value = AuthState.Loading
             val user = User(nombre = nombre, apellido = apellido, email = email, telefono = telefono)
