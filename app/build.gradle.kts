@@ -45,7 +45,16 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    
+    // Iconos extendidos de Material
     implementation("androidx.compose.material:material-icons-extended")
+    
+    // Haze para efecto Glassmorphism / Liquid Glass real
+    implementation("dev.chrisbanes.haze:haze:1.3.1")
+    
+    // Fuentes de Google (Nunito Sans / DM Sans)
+    implementation("androidx.compose.ui:ui-text-google-fonts:1.7.8")
+
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
@@ -53,10 +62,14 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
+    
+    // Firebase
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
+    
+    // Navigation, ViewModel y Coil
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.coil.compose)

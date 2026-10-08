@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <array name="com_google_android_gms_fonts_certs">
+        <item>@array/com_google_android_gms_fonts_certs_dev</item>
+        <item>@array/com_google_android_gms_fonts_certs_prod</item>
+    </array>
+    <string-array name="com_google_android_gms_fonts_certs_dev">
+        <item>
+            MIIEQzCCAyugAwIBAgIJAN2ACidAtLfdMA0GCSqGSIb3DQEBCwUAMIGUMQswCQYDVQQGEwJV
+            UzETMBEGA1UECBMKQ2FsaWZvcm5pYTEWMBQGA1UEBxMNTW91bnRhaW4gVmlldzEQMA4GA1UE
+            ChMHR29vZ2xlMRAwDgYDVQQLEwdBbmRyb2lkMTEwLAYDVQQDEyVhbmRyb2lkLmNsaWVudHMu
+            Z29vZ2xlLmNvbS9BbmRyb2lkS2V5c3RvcmUwHhcNMTYwMjIyMTkzOTEzWhcNMzYwMjE3MTkz
+            OTEzWjCBlDELMAkGA1UEBhMCVVMxEzARBgNVBAgTCkNhbGlmb3JuaWExFjAUBgNVBAcTDU1v
+            dW50YWluIFZpZXcxEDAOBgNVBAoTB0dvb2dsZTEQMA4GA1UECxMHQW5kcm9pZDExMC8GA1UE
+            AxMmYW5kcm9pZC5jbGllbnRzLmdvb2dsZS5jb20vQW5kcm9pZEtleXN0b3JlMIIBIjANBgkq
+            hkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuX7f673n/Rk8s5O+K0mC0W33Oa9h1gG4s4nC8/2
+            hN4C1dJb7m/M/9k+50j3a1C2a884N36+3y/Q9Wk6u9f1iOa2vA60S0S0+8v8m2lK0A==
+        </item>
+    </string-array>
+    <string-array name="com_google_android_gms_fonts_certs_prod">
+        <item>
+            MIIEQzCCAyugAwIBAgIJAN2ACidAtLfdMA0GCSqGSIb3DQEBCwUAMIGUMQswCQYDVQQGEwJV
+            UzETMBEGA1UECBMKQ2FsaWZvcm5pYTEWMBQGA1UEBxMNTW91bnRhaW4gVmlldzEQMA4GA1UE
+            ChMHR29vZ2xlMRAwDgYDVQQLEwdBbmRyb2lkMTEwLAYDVQQDEyVhbmRyb2lkLmNsaWVudHMu
+            Z29vZ2xlLmNvbS9BbmRyb2lkS2V5c3RvcmUwHhcNMTYwMjIyMTkzOTEzWhcNMzYwMjE3MTkz
+            OTEzWjCBlDELMAkGA1UEBhMCVVMxEzARBgNVBAgTCkNhbGlmb3JuaWExFjAUBgNVBAcTDU1v
+            dW50YWluIFZpZXcxEDAOBgNVBAoTB0dvb2dsZTEQMA4GA1UECxMHQW5kcm9pZDExMC8GA1UE
+            AxMmYW5kcm9pZC5jbGllbnRzLmdvb2dsZS5jb20vQW5kcm9pZEtleXN0b3JlMIIBIjANBgkq
+            hkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuX7f673n/Rk8s5O+K0mC0W33Oa9h1gG4s4nC8/2
+            hN4C1dJb7m/M/9k+50j3a1C2a884N36+3y/Q9Wk6u9f1iOa2vA60S0S0+8v8m2lK0A==
+        </item>
+    </string-array>
+</resources>
