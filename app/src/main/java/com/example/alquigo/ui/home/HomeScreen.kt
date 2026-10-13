@@ -32,6 +32,7 @@ fun HomeScreen(
     propertyViewModel: PropertyViewModel,
     onNavigateToAddProperty: () -> Unit,
     onNavigateToPropertyList: () -> Unit,
+    onNavigateToPropertyDetail: (String) -> Unit,
     hazeState: HazeState? = null
 ) {
     val uiState by propertyViewModel.uiState
@@ -41,11 +42,7 @@ fun HomeScreen(
         propertyViewModel.loadProperties()
     }
 
-    // Filtrado de propiedades disponibles u ocupadas
-    val disponiblesProps = uiState.properties.filter { prop ->
-        // En una futura integración se conecta directamente con hasActiveContract
-        true
-    }
+    val disponiblesProps = uiState.properties
 
     Column(
         modifier = Modifier
@@ -207,7 +204,7 @@ fun HomeScreen(
                 items(disponiblesProps, key = { it.id }) { property ->
                     PropertyCard(
                         property = property,
-                        onClick = onNavigateToPropertyList,
+                        onClick = { onNavigateToPropertyDetail(property.id) },
                         estado = "Disponible",
                         hazeState = hazeState
                     )
@@ -216,7 +213,7 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // SECCIÓN 2: Ocupadas (si existen propiedades)
+            // SECCIÓN 2: Ocupadas este mes
             Box(modifier = Modifier.padding(horizontal = 24.dp)) {
                 SectionHeader(
                     title = "Ocupadas este mes",
@@ -233,7 +230,7 @@ fun HomeScreen(
                 items(uiState.properties.take(3), key = { "ocupada_${it.id}" }) { property ->
                     PropertyCard(
                         property = property,
-                        onClick = onNavigateToPropertyList,
+                        onClick = { onNavigateToPropertyDetail(property.id) },
                         estado = "Ocupada",
                         hazeState = hazeState
                     )

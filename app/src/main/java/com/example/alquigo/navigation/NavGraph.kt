@@ -25,7 +25,9 @@ import com.example.alquigo.ui.profile.ProfileScreen
 import com.example.alquigo.ui.property.AddPropertyScreen
 import com.example.alquigo.ui.property.EditPropertyScreen
 import com.example.alquigo.ui.property.PropertyListScreen
+import com.example.alquigo.ui.property.PropertyDetailScreen
 import com.example.alquigo.ui.property.PropertyViewModel
+import com.example.alquigo.ui.tenants.AddTenantScreen
 import com.example.alquigo.ui.tenants.TenantsScreen
 import dev.chrisbanes.haze.HazeState
 
@@ -38,7 +40,11 @@ sealed class Screen(val route: String) {
     object EditProperty : Screen("edit_property/{propertyId}") {
         fun createRoute(propertyId: String) = "edit_property/$propertyId"
     }
+    object PropertyDetail : Screen("property_detail/{propertyId}") {
+        fun createRoute(propertyId: String) = "property_detail/$propertyId"
+    }
     object Tenants : Screen("tenants")
+    object AddTenant : Screen("add_tenant")
     object Profile : Screen("profile")
 }
 
@@ -102,6 +108,9 @@ fun NavGraph(
                     propertyViewModel = propertyViewModel,
                     onNavigateToAddProperty = { navController.navigate(Screen.AddProperty.route) },
                     onNavigateToPropertyList = { navController.navigate(Screen.PropertyList.route) },
+                    onNavigateToPropertyDetail = { propertyId ->
+                        navController.navigate(Screen.PropertyDetail.createRoute(propertyId))
+                    },
                     hazeState = hazeState
                 )
             }
@@ -117,6 +126,9 @@ fun NavGraph(
                     onNavigateBack = { navController.popBackStack() },
                     onNavigateToEditProperty = { propertyId ->
                         navController.navigate(Screen.EditProperty.createRoute(propertyId))
+                    },
+                    onNavigateToPropertyDetail = { propertyId ->
+                        navController.navigate(Screen.PropertyDetail.createRoute(propertyId))
                     }
                 )
             }
@@ -131,8 +143,26 @@ fun NavGraph(
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
+            composable(
+                route = Screen.PropertyDetail.route,
+                arguments = listOf(navArgument("propertyId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val propertyId = backStackEntry.arguments?.getString("propertyId") ?: ""
+                PropertyDetailScreen(
+                    propertyId = propertyId,
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
             composable(Screen.Tenants.route) {
-                TenantsScreen(hazeState = hazeState)
+                TenantsScreen(
+                    onNavigateToAddTenant = { navController.navigate(Screen.AddTenant.route) },
+                    hazeState = hazeState
+                )
+            }
+            composable(Screen.AddTenant.route) {
+                AddTenantScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
             }
             composable(Screen.Profile.route) {
                 ProfileScreen(

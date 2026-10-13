@@ -26,7 +26,8 @@ import com.example.alquigo.ui.theme.*
 fun PropertyListScreen(
     viewModel: PropertyViewModel,
     onNavigateBack: () -> Unit,
-    onNavigateToEditProperty: (String) -> Unit
+    onNavigateToEditProperty: (String) -> Unit,
+    onNavigateToPropertyDetail: (String) -> Unit
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState
@@ -120,7 +121,7 @@ fun PropertyListScreen(
                     Column {
                         PropertyCard(
                             property = property,
-                            onClick = { onNavigateToEditProperty(property.id) },
+                            onClick = { onNavigateToPropertyDetail(property.id) },
                             estado = "Disponible"
                         )
                         Spacer(modifier = Modifier.height(8.dp))
