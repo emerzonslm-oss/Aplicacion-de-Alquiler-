@@ -7,5 +7,6 @@ data class Property(
     val precio: Double = 0.0,
     val direccion: String = "",
     val tipo: String = "",
-    val imagenUri: String = ""
+    val imagenUri: String = "",
+    val estado: String = "DISPONIBLE" // "DISPONIBLE", "OCUPADA"
 )

@@ -42,7 +42,12 @@ fun HomeScreen(
         propertyViewModel.loadProperties()
     }
 
-    val disponiblesProps = uiState.properties
+    val disponiblesProps = remember(uiState.properties) {
+        uiState.properties.filter { !it.estado.equals("OCUPADA", ignoreCase = true) }
+    }
+    val ocupadasProps = remember(uiState.properties) {
+        uiState.properties.filter { it.estado.equals("OCUPADA", ignoreCase = true) }
+    }
 
     Column(
         modifier = Modifier
@@ -188,52 +193,56 @@ fun HomeScreen(
             }
         } else {
             // SECCIÓN 1: Disponibles ahora
-            Box(modifier = Modifier.padding(horizontal = 24.dp)) {
-                SectionHeader(
-                    title = "Disponibles ahora",
-                    onArrowClick = onNavigateToPropertyList
-                )
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                contentPadding = PaddingValues(horizontal = 24.dp)
-            ) {
-                items(disponiblesProps, key = { it.id }) { property ->
-                    PropertyCard(
-                        property = property,
-                        onClick = { onNavigateToPropertyDetail(property.id) },
-                        estado = "Disponible",
-                        hazeState = hazeState
+            if (disponiblesProps.isNotEmpty()) {
+                Box(modifier = Modifier.padding(horizontal = 24.dp)) {
+                    SectionHeader(
+                        title = "Disponibles ahora",
+                        onArrowClick = onNavigateToPropertyList
                     )
                 }
-            }
 
-            Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(14.dp))
+
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    contentPadding = PaddingValues(horizontal = 24.dp)
+                ) {
+                    items(disponiblesProps, key = { it.id }) { property ->
+                        PropertyCard(
+                            property = property,
+                            onClick = { onNavigateToPropertyDetail(property.id) },
+                            estado = "Disponible",
+                            hazeState = hazeState
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
+            }
 
             // SECCIÓN 2: Ocupadas este mes
-            Box(modifier = Modifier.padding(horizontal = 24.dp)) {
-                SectionHeader(
-                    title = "Ocupadas este mes",
-                    onArrowClick = onNavigateToPropertyList
-                )
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                contentPadding = PaddingValues(horizontal = 24.dp)
-            ) {
-                items(uiState.properties.take(3), key = { "ocupada_${it.id}" }) { property ->
-                    PropertyCard(
-                        property = property,
-                        onClick = { onNavigateToPropertyDetail(property.id) },
-                        estado = "Ocupada",
-                        hazeState = hazeState
+            if (ocupadasProps.isNotEmpty()) {
+                Box(modifier = Modifier.padding(horizontal = 24.dp)) {
+                    SectionHeader(
+                        title = "Ocupadas este mes",
+                        onArrowClick = onNavigateToPropertyList
                     )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    contentPadding = PaddingValues(horizontal = 24.dp)
+                ) {
+                    items(ocupadasProps, key = { "ocupada_${it.id}" }) { property ->
+                        PropertyCard(
+                            property = property,
+                            onClick = { onNavigateToPropertyDetail(property.id) },
+                            estado = "Ocupada",
+                            hazeState = hazeState
+                        )
+                    }
                 }
             }
         }

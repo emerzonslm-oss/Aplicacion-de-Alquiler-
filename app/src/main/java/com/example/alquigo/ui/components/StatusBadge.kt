@@ -21,11 +21,14 @@ fun StatusBadge(
     status: String,
     modifier: Modifier = Modifier
 ) {
-    val isPaid = status.equals("PAGADO", ignoreCase = true) || status.equals("COMPLETADO", ignoreCase = true) || status.equals("ACTIVO", ignoreCase = true)
-
-    val bgColor = if (isPaid) PaidStatusBg else PendingStatusBg
-    val textColor = if (isPaid) PaidStatusText else PendingStatusText
-    val labelText = if (isPaid) "Pagado" else "Pendiente"
+    val (bgColor, textColor, labelText) = when (status.uppercase()) {
+        "PAGADO", "COMPLETADO" -> Triple(PaidStatusBg, PaidStatusText, "Pagado")
+        "ACTIVO" -> Triple(PaidStatusBg, PaidStatusText, "Activo")
+        "DISPONIBLE" -> Triple(PaidStatusBg, PaidStatusText, "Disponible")
+        "OCUPADA" -> Triple(PendingStatusBg, PendingStatusText, "Ocupada")
+        "PENDIENTE" -> Triple(PendingStatusBg, PendingStatusText, "Pendiente")
+        else -> Triple(PendingStatusBg, PendingStatusText, status.lowercase().replaceFirstChar { it.uppercase() })
+    }
 
     Box(
         modifier = modifier

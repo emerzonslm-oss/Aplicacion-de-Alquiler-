@@ -59,8 +59,12 @@ class PropertyDetailViewModel(
                     tenant = tenantResult.getOrNull()
                 }
 
-                // 4. Obtener Últimos Pagos
+                // 4. Obtener Pagos del Contrato
                 val paymentsResult = propertyRepository.getRecentPaymentsForContract(contract.id)
+                payments = paymentsResult.getOrNull() ?: emptyList()
+            } else {
+                // Si no hay contrato activo, obtener todos los pagos de la propiedad
+                val paymentsResult = propertyRepository.getAllPaymentsForProperty(propertyId)
                 payments = paymentsResult.getOrNull() ?: emptyList()
             }
 
@@ -70,6 +74,28 @@ class PropertyDetailViewModel(
                 activeContract = contract,
                 currentTenant = tenant,
                 recentPayments = payments
+            )
+        }
+    }
+
+    fun markPaymentAsPaid(
+        paymentId: String,
+        fechaPagoReal: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            val propertyId = _uiState.value.property?.id ?: ""
+            propertyRepository.markPaymentAsPaid(paymentId, fechaPagoReal).fold(
+                onSuccess = {
+                    if (propertyId.isNotBlank()) {
+                        loadPropertyDetail(propertyId)
+                    }
+                    onSuccess()
+                },
+                onFailure = { error ->
+                    onError(error.message ?: "Error al marcar el pago como pagado")
+                }
             )
         }
     }

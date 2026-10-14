@@ -122,7 +122,7 @@ fun PropertyListScreen(
                         PropertyCard(
                             property = property,
                             onClick = { onNavigateToPropertyDetail(property.id) },
-                            estado = "Disponible"
+                            estado = if (property.estado.equals("OCUPADA", ignoreCase = true)) "Ocupada" else "Disponible"
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Row(

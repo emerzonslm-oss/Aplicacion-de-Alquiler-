@@ -23,6 +23,7 @@ import com.example.alquigo.ui.components.GlassBottomBar
 import com.example.alquigo.ui.home.HomeScreen
 import com.example.alquigo.ui.profile.ProfileScreen
 import com.example.alquigo.ui.property.AddPropertyScreen
+import com.example.alquigo.ui.property.AssignTenantScreen
 import com.example.alquigo.ui.property.EditPropertyScreen
 import com.example.alquigo.ui.property.PropertyListScreen
 import com.example.alquigo.ui.property.PropertyDetailScreen
@@ -42,6 +43,9 @@ sealed class Screen(val route: String) {
     }
     object PropertyDetail : Screen("property_detail/{propertyId}") {
         fun createRoute(propertyId: String) = "property_detail/$propertyId"
+    }
+    object AssignTenant : Screen("assign_tenant/{propertyId}") {
+        fun createRoute(propertyId: String) = "assign_tenant/$propertyId"
     }
     object Tenants : Screen("tenants")
     object AddTenant : Screen("add_tenant")
@@ -150,7 +154,21 @@ fun NavGraph(
                 val propertyId = backStackEntry.arguments?.getString("propertyId") ?: ""
                 PropertyDetailScreen(
                     propertyId = propertyId,
-                    onNavigateBack = { navController.popBackStack() }
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToAssignTenant = { propId ->
+                        navController.navigate(Screen.AssignTenant.createRoute(propId))
+                    }
+                )
+            }
+            composable(
+                route = Screen.AssignTenant.route,
+                arguments = listOf(navArgument("propertyId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val propertyId = backStackEntry.arguments?.getString("propertyId") ?: ""
+                AssignTenantScreen(
+                    propertyId = propertyId,
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToAddTenant = { navController.navigate(Screen.AddTenant.route) }
                 )
             }
             composable(Screen.Tenants.route) {

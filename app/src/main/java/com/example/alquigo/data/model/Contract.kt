@@ -6,5 +6,6 @@ data class Contract(
     val tenantId: String = "",
     val fechaInicio: String = "",
     val fechaFin: String = "",
+    val montoMensual: Double = 0.0,
     val estado: String = "ACTIVO" // "ACTIVO", "INACTIVO", "FINALIZADO"
 )
