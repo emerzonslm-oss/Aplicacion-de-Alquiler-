@@ -10,6 +10,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.HomeWork
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,6 +21,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -36,7 +40,7 @@ fun HomeScreen(
     hazeState: HazeState? = null
 ) {
     val uiState by propertyViewModel.uiState
-    val categories = listOf("Todos", "Casa", "Apartamento", "Habitación", "Local Comercial")
+    val categories = listOf("Todos", "Favoritos", "Casa", "Apartamento", "Habitación", "Local Comercial")
 
     LaunchedEffect(Unit) {
         propertyViewModel.loadProperties()
@@ -168,27 +172,97 @@ fun HomeScreen(
                             .padding(28.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text("🏡", fontSize = 44.sp)
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = "Aún no tienes propiedades publicadas.",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = TextPrimary
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Publica la primera para empezar a gestionar tus alquileres.",
-                            fontSize = 14.sp,
-                            color = TextSecondary
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        PrimaryButton(
-                            text = "Publicar la primera",
-                            onClick = onNavigateToAddProperty,
-                            modifier = Modifier.width(200.dp)
-                        )
+                        if (uiState.selectedFilter == "Favoritos") {
+                            Icon(
+                                imageVector = Icons.Outlined.FavoriteBorder,
+                                contentDescription = null,
+                                tint = AirbnbPrimary,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Sin favoritos guardados",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Toca el icono de corazón en cualquier propiedad para guardarla en tus favoritos.",
+                                fontSize = 14.sp,
+                                color = TextSecondary,
+                                textAlign = TextAlign.Center
+                            )
+                        } else if (uiState.selectedFilter != "Todos") {
+                            Icon(
+                                imageVector = Icons.Outlined.Search,
+                                contentDescription = null,
+                                tint = TextSecondary,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "No hay propiedades en '${uiState.selectedFilter}'",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Outlined.HomeWork,
+                                contentDescription = null,
+                                tint = AirbnbPrimary,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Aún no tienes propiedades publicadas.",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextPrimary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Publica la primera para empezar a gestionar tus alquileres.",
+                                fontSize = 14.sp,
+                                color = TextSecondary
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            PrimaryButton(
+                                text = "Publicar la primera",
+                                onClick = onNavigateToAddProperty,
+                                modifier = Modifier.width(200.dp)
+                            )
+                        }
                     }
+                }
+            }
+        } else if (uiState.selectedFilter != "Todos") {
+            // Sección para Filtro Activo ("Favoritos", "Casa", "Apartamento", etc.)
+            val sectionTitle = if (uiState.selectedFilter == "Favoritos") "Mis Favoritos (${uiState.properties.size})" else uiState.selectedFilter
+            Box(modifier = Modifier.padding(horizontal = 24.dp)) {
+                SectionHeader(
+                    title = sectionTitle,
+                    onArrowClick = onNavigateToPropertyList
+                )
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                contentPadding = PaddingValues(horizontal = 24.dp)
+            ) {
+                items(uiState.properties, key = { it.id }) { property ->
+                    PropertyCard(
+                        property = property,
+                        onClick = { onNavigateToPropertyDetail(property.id) },
+                        modifier = Modifier.width(180.dp),
+                        estado = if (property.estado.equals("OCUPADA", ignoreCase = true)) "Ocupada" else "Disponible",
+                        isFavorite = uiState.favoritePropertyIds.contains(property.id),
+                        onFavoriteClick = { propertyViewModel.toggleFavorite(property.id) },
+                        hazeState = hazeState
+                    )
                 }
             }
         } else {
@@ -211,7 +285,10 @@ fun HomeScreen(
                         PropertyCard(
                             property = property,
                             onClick = { onNavigateToPropertyDetail(property.id) },
+                            modifier = Modifier.width(180.dp),
                             estado = "Disponible",
+                            isFavorite = uiState.favoritePropertyIds.contains(property.id),
+                            onFavoriteClick = { propertyViewModel.toggleFavorite(property.id) },
                             hazeState = hazeState
                         )
                     }
@@ -239,7 +316,10 @@ fun HomeScreen(
                         PropertyCard(
                             property = property,
                             onClick = { onNavigateToPropertyDetail(property.id) },
+                            modifier = Modifier.width(180.dp),
                             estado = "Ocupada",
+                            isFavorite = uiState.favoritePropertyIds.contains(property.id),
+                            onFavoriteClick = { propertyViewModel.toggleFavorite(property.id) },
                             hazeState = hazeState
                         )
                     }

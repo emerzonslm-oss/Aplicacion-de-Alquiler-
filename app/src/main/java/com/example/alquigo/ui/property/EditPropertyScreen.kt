@@ -23,7 +23,8 @@ import coil.compose.AsyncImage
 import com.example.alquigo.data.model.Property
 import com.example.alquigo.ui.components.AlquiTextField
 import com.example.alquigo.ui.components.PrimaryButton
-import com.example.alquigo.ui.components.copyUriToInternalStorage
+import com.example.alquigo.ui.components.compressAndConvertUriToBase64
+import com.example.alquigo.ui.components.getImageModel
 import com.example.alquigo.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -71,8 +72,8 @@ fun EditPropertyScreen(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         if (uri != null) {
-            val savedLocalUri = copyUriToInternalStorage(context, uri)
-            persistentImageUriString = savedLocalUri
+            val savedUri = compressAndConvertUriToBase64(context, uri)
+            persistentImageUriString = savedUri
             Toast.makeText(context, "Nueva imagen guardada correctamente", Toast.LENGTH_SHORT).show()
         }
     }
@@ -103,6 +104,7 @@ fun EditPropertyScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
+                    .imePadding()
                     .padding(20.dp)
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -127,7 +129,7 @@ fun EditPropertyScreen(
                     ) {
                         if (persistentImageUriString.isNotBlank()) {
                             AsyncImage(
-                                model = persistentImageUriString,
+                                model = getImageModel(persistentImageUriString),
                                 contentDescription = "Foto de la propiedad",
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop

@@ -6,6 +6,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.VisualTransformation
 import com.example.alquigo.ui.theme.AirbnbPrimary
 import com.example.alquigo.ui.theme.BorderLight
 import com.example.alquigo.ui.theme.InputShape
@@ -23,6 +24,7 @@ fun AlquiTextField(
     singleLine: Boolean = true,
     minLines: Int = 1,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
     trailingIcon: @Composable (() -> Unit)? = null,
     readOnly: Boolean = false
 ) {
@@ -36,6 +38,7 @@ fun AlquiTextField(
         minLines = minLines,
         readOnly = readOnly,
         keyboardOptions = keyboardOptions,
+        visualTransformation = visualTransformation,
         trailingIcon = trailingIcon,
         shape = InputShape,
         colors = OutlinedTextFieldDefaults.colors(

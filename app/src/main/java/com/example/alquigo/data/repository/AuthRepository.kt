@@ -41,4 +41,26 @@ class AuthRepository {
     fun isUserLoggedIn(): Boolean {
         return auth.currentUser != null
     }
+
+    suspend fun getUserProfile(): Result<User> {
+        return try {
+            val uid = auth.currentUser?.uid ?: throw Exception("No hay usuario autenticado")
+            val snapshot = firestore.collection("usuarios").document(uid).get().await()
+            val user = snapshot.toObject(User::class.java)?.copy(uid = uid) 
+                ?: User(uid = uid, email = auth.currentUser?.email ?: "")
+            Result.success(user)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateUserProfile(user: User): Result<Unit> {
+        return try {
+            val uid = auth.currentUser?.uid ?: throw Exception("No hay usuario autenticado")
+            firestore.collection("usuarios").document(uid).set(user).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

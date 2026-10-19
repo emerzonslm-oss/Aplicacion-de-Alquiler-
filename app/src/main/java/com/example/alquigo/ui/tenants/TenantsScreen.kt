@@ -1,6 +1,7 @@
 package com.example.alquigo.ui.tenants
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -104,7 +105,9 @@ fun TenantsScreen(
             ) {
                 items(uiState.tenants, key = { it.id }) { tenant ->
                     Card(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(1.dp, BorderLight, CardShape),
                         shape = CardShape,
                         colors = CardDefaults.cardColors(containerColor = Color.White),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)

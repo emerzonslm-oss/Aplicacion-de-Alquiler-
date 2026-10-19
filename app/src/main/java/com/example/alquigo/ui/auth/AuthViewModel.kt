@@ -15,10 +15,70 @@ class AuthViewModel(private val repository: AuthRepository = AuthRepository()) :
     private val _authState = mutableStateOf<AuthState>(AuthState.Idle)
     val authState: State<AuthState> = _authState
 
+    private val _userState = mutableStateOf<User?>(null)
+    val userState: State<User?> = _userState
+
     private val _uiEvent = MutableSharedFlow<UiEvent>()
     val uiEvent = _uiEvent.asSharedFlow()
 
+    init {
+        if (isUserLoggedIn()) {
+            loadUserProfile()
+        }
+    }
+
     fun isUserLoggedIn() = repository.isUserLoggedIn()
+
+    fun loadUserProfile() {
+        viewModelScope.launch {
+            repository.getUserProfile().onSuccess { user ->
+                _userState.value = user
+            }
+        }
+    }
+
+    fun updateUserProfile(
+        nombre: String,
+        apellido: String,
+        telefono: String,
+        direcion: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        if (nombre.isBlank() || apellido.isBlank() || telefono.isBlank()) {
+            onError("Por favor complete los campos obligatorios")
+            return
+        }
+        if (telefono.length != 9) {
+            onError("El teléfono debe tener 9 dígitos")
+            return
+        }
+
+        viewModelScope.launch {
+            _authState.value = AuthState.Loading
+            val currentUser = _userState.value ?: User(
+                uid = repository.getCurrentUser()?.uid ?: "",
+                email = repository.getCurrentUser()?.email ?: ""
+            )
+            val updatedUser = currentUser.copy(
+                nombre = nombre,
+                apellido = apellido,
+                telefono = telefono,
+                direcion = direcion
+            )
+            repository.updateUserProfile(updatedUser).fold(
+                onSuccess = {
+                    _userState.value = updatedUser
+                    _authState.value = AuthState.Success
+                    onSuccess()
+                },
+                onFailure = {
+                    _authState.value = AuthState.Error(it.message ?: "Error al actualizar perfil")
+                    onError(it.message ?: "Error al actualizar perfil")
+                }
+            )
+        }
+    }
 
     fun login(email: String, contrasena: String) {
         if (email.isBlank() || contrasena.isBlank()) {
@@ -30,6 +90,7 @@ class AuthViewModel(private val repository: AuthRepository = AuthRepository()) :
             _authState.value = AuthState.Loading
             repository.login(email, contrasena).fold(
                 onSuccess = {
+                    loadUserProfile()
                     _authState.value = AuthState.Success
                     _uiEvent.emit(UiEvent.NavigateToHome)
                 },
@@ -76,6 +137,7 @@ class AuthViewModel(private val repository: AuthRepository = AuthRepository()) :
             val user = User(nombre = nombre, apellido = apellido, email = email, telefono = telefono)
             repository.register(user, contrasena).fold(
                 onSuccess = {
+                    loadUserProfile()
                     _authState.value = AuthState.Success
                     _uiEvent.emit(UiEvent.NavigateToHome)
                 },
@@ -88,6 +150,8 @@ class AuthViewModel(private val repository: AuthRepository = AuthRepository()) :
 
     fun logout() {
         repository.logout()
+        _userState.value = null
+        _authState.value = AuthState.Idle
         viewModelScope.launch {
             _uiEvent.emit(UiEvent.NavigateToLogin)
         }

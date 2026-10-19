@@ -2,6 +2,7 @@ package com.example.alquigo.ui.property
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -9,6 +10,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.HomeWork
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,7 +36,7 @@ fun PropertyListScreen(
     val context = LocalContext.current
     val uiState by viewModel.uiState
 
-    val filters = listOf("Todos", "Casa", "Apartamento", "Habitación", "Local Comercial")
+    val filters = listOf("Todos", "Favoritos", "Casa", "Apartamento", "Habitación", "Local Comercial")
 
     var propertyToDelete by remember { mutableStateOf<Property?>(null) }
     var showDeleteConfirmationDialog by remember { mutableStateOf(false) }
@@ -100,15 +104,60 @@ fun PropertyListScreen(
             }
         } else if (uiState.properties.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("🏢", fontSize = 48.sp)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = "No hay propiedades encontradas.",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(24.dp)
+                ) {
+                    if (uiState.selectedFilter == "Favoritos") {
+                        Icon(
+                            imageVector = Icons.Outlined.FavoriteBorder,
+                            contentDescription = null,
+                            tint = AirbnbPrimary,
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "Sin favoritos guardados",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Toca el icono de corazón en cualquier propiedad para guardarla en tus favoritos.",
+                            fontSize = 14.sp,
+                            color = TextSecondary,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    } else if (uiState.selectedFilter != "Todos") {
+                        Icon(
+                            imageVector = Icons.Outlined.Search,
+                            contentDescription = null,
+                            tint = TextSecondary,
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "No hay propiedades en '${uiState.selectedFilter}'",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Outlined.HomeWork,
+                            contentDescription = null,
+                            tint = AirbnbPrimary,
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "No hay propiedades encontradas.",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                    }
                 }
             }
         } else {
@@ -118,34 +167,57 @@ fun PropertyListScreen(
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
                 items(uiState.properties, key = { it.id }) { property ->
-                    Column {
-                        PropertyCard(
-                            property = property,
-                            onClick = { onNavigateToPropertyDetail(property.id) },
-                            estado = if (property.estado.equals("OCUPADA", ignoreCase = true)) "Ocupada" else "Disponible"
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            IconButton(onClick = { onNavigateToEditProperty(property.id) }) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Edit,
-                                    contentDescription = "Editar",
-                                    tint = TextPrimary
-                                )
-                            }
-                            IconButton(onClick = {
-                                propertyToDelete = property
-                                showDeleteConfirmationDialog = true
-                            }) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Delete,
-                                    contentDescription = "Eliminar",
-                                    tint = AirbnbPrimary
-                                )
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = CardShape,
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            PropertyCard(
+                                property = property,
+                                onClick = { onNavigateToPropertyDetail(property.id) },
+                                modifier = Modifier.fillMaxWidth(),
+                                estado = if (property.estado.equals("OCUPADA", ignoreCase = true)) "Ocupada" else "Disponible",
+                                isFavorite = uiState.favoritePropertyIds.contains(property.id),
+                                onFavoriteClick = { viewModel.toggleFavorite(property.id) }
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                TextButton(
+                                    onClick = { onNavigateToEditProperty(property.id) }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Edit,
+                                        contentDescription = "Editar",
+                                        tint = TextPrimary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Editar", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                TextButton(
+                                    onClick = {
+                                        propertyToDelete = property
+                                        showDeleteConfirmationDialog = true
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Delete,
+                                        contentDescription = "Eliminar",
+                                        tint = AirbnbPrimary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Eliminar", color = AirbnbPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                }
                             }
                         }
                     }

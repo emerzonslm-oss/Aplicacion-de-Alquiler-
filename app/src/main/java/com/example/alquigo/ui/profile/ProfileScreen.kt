@@ -1,6 +1,8 @@
 package com.example.alquigo.ui.profile
 
+import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -9,16 +11,23 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForwardIos
+import androidx.compose.material.icons.outlined.CardTravel
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.ExitToApp
+import androidx.compose.material.icons.outlined.HouseSiding
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -31,9 +40,27 @@ import dev.chrisbanes.haze.hazeSource
 @Composable
 fun ProfileScreen(
     viewModel: AuthViewModel,
+    onNavigateToEditProfile: () -> Unit = {},
     hazeState: HazeState? = null
 ) {
     val currentUser = viewModel.isUserLoggedIn()
+    val userState by viewModel.userState
+    val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        viewModel.loadUserProfile()
+    }
+
+    val authEmail = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email
+    val emailUser = authEmail?.substringBefore("@") ?: ""
+    val formattedEmailUser = emailUser.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+
+    val userName = when {
+        !userState?.nombre.isNullOrBlank() -> "${userState?.nombre} ${userState?.apellido ?: ""}".trim()
+        formattedEmailUser.isNotBlank() -> formattedEmailUser
+        else -> "Usuario AlquiGo"
+    }
+    val userInitial = userName.take(1).uppercase()
 
     Column(
         modifier = Modifier
@@ -55,7 +82,8 @@ fun ProfileScreen(
                 modifier = Modifier
                     .size(42.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFFF2F2F2)),
+                    .background(Color(0xFFF2F2F2))
+                    .clickable { Toast.makeText(context, "No tienes notificaciones nuevas", Toast.LENGTH_SHORT).show() },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -81,7 +109,9 @@ fun ProfileScreen(
 
         // Tarjeta del Usuario
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, BorderLight, CardShape),
             shape = CardShape,
             colors = CardDefaults.cardColors(containerColor = Color.White),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -93,13 +123,13 @@ fun ProfileScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 AvatarInitial(
-                    name = "Andy",
+                    name = userName,
                     size = 90.dp,
                     fontSize = 40
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "Andy",
+                    text = userName,
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary
@@ -122,7 +152,9 @@ fun ProfileScreen(
             Card(
                 modifier = Modifier
                     .weight(1f)
-                    .height(140.dp),
+                    .height(140.dp)
+                    .border(1.dp, BorderLight, CardShape)
+                    .clickable { Toast.makeText(context, "Viajes anteriores", Toast.LENGTH_SHORT).show() },
                 shape = CardShape,
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -145,7 +177,12 @@ fun ProfileScreen(
                     Column(
                         modifier = Modifier.align(Alignment.BottomStart)
                     ) {
-                        Text("🧳", fontSize = 32.sp)
+                        Icon(
+                            imageVector = Icons.Outlined.CardTravel,
+                            contentDescription = null,
+                            tint = AirbnbPrimary,
+                            modifier = Modifier.size(32.dp)
+                        )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text("Viajes anteriores", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
                     }
@@ -155,7 +192,9 @@ fun ProfileScreen(
             Card(
                 modifier = Modifier
                     .weight(1f)
-                    .height(140.dp),
+                    .height(140.dp)
+                    .border(1.dp, BorderLight, CardShape)
+                    .clickable { Toast.makeText(context, "Conexiones", Toast.LENGTH_SHORT).show() },
                 shape = CardShape,
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -178,7 +217,12 @@ fun ProfileScreen(
                     Column(
                         modifier = Modifier.align(Alignment.BottomStart)
                     ) {
-                        Text("👥", fontSize = 32.sp)
+                        Icon(
+                            imageVector = Icons.Outlined.People,
+                            contentDescription = null,
+                            tint = AirbnbPrimary,
+                            modifier = Modifier.size(32.dp)
+                        )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text("Conexiones", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
                     }
@@ -190,7 +234,10 @@ fun ProfileScreen(
 
         // Banner Promocional "Conviértete en anfitrión"
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, BorderLight, CardShape)
+                .clickable { Toast.makeText(context, "Modo anfitrión disponible", Toast.LENGTH_SHORT).show() },
             shape = CardShape,
             colors = CardDefaults.cardColors(containerColor = Color.White),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -201,7 +248,12 @@ fun ProfileScreen(
                     .padding(20.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("🧍‍♀️", fontSize = 40.sp)
+                Icon(
+                    imageVector = Icons.Outlined.HouseSiding,
+                    contentDescription = null,
+                    tint = AirbnbPrimary,
+                    modifier = Modifier.size(40.dp)
+                )
                 Spacer(modifier = Modifier.width(16.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -231,11 +283,17 @@ fun ProfileScreen(
                 modifier = Modifier
                     .clip(CircleShape)
                     .background(DarkButtonBg)
-                    .clickable { }
+                    .clickable { Toast.makeText(context, "Cambiando a modo anfitrión", Toast.LENGTH_SHORT).show() }
                     .padding(horizontal = 20.dp, vertical = 12.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("🔀 ", fontSize = 14.sp)
+                    Icon(
+                        imageVector = Icons.Outlined.SwapHoriz,
+                        contentDescription = null,
+                        tint = DarkButtonText,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "Cambiar a modo anfitrión",
                         fontSize = 14.sp,
@@ -252,7 +310,7 @@ fun ProfileScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { }
+                .clickable { onNavigateToEditProfile() }
                 .padding(vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween

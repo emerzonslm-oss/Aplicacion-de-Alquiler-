@@ -9,6 +9,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -21,6 +22,7 @@ import com.example.alquigo.ui.auth.RegisterScreen
 import com.example.alquigo.ui.auth.UiEvent
 import com.example.alquigo.ui.components.GlassBottomBar
 import com.example.alquigo.ui.home.HomeScreen
+import com.example.alquigo.ui.profile.EditProfileScreen
 import com.example.alquigo.ui.profile.ProfileScreen
 import com.example.alquigo.ui.property.AddPropertyScreen
 import com.example.alquigo.ui.property.AssignTenantScreen
@@ -50,6 +52,7 @@ sealed class Screen(val route: String) {
     object Tenants : Screen("tenants")
     object AddTenant : Screen("add_tenant")
     object Profile : Screen("profile")
+    object EditProfile : Screen("edit_profile")
 }
 
 @Composable
@@ -185,7 +188,14 @@ fun NavGraph(
             composable(Screen.Profile.route) {
                 ProfileScreen(
                     viewModel = viewModel,
+                    onNavigateToEditProfile = { navController.navigate(Screen.EditProfile.route) },
                     hazeState = hazeState
+                )
+            }
+            composable(Screen.EditProfile.route) {
+                EditProfileScreen(
+                    viewModel = viewModel,
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
         }
@@ -197,14 +207,15 @@ fun NavGraph(
                 onNavigate = { targetRoute ->
                     if (targetRoute != currentRoute) {
                         navController.navigate(targetRoute) {
-                            popUpTo(Screen.Home.route) { saveState = true }
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
                             launchSingleTop = true
                             restoreState = true
                         }
                     }
                 },
-                modifier = Modifier.align(Alignment.BottomCenter),
-                hazeState = hazeState
+                modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
     }

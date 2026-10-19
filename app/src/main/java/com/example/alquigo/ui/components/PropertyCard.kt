@@ -1,16 +1,18 @@
 package com.example.alquigo.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.HomeWork
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -22,6 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
 import com.example.alquigo.data.model.Property
+import com.example.alquigo.ui.theme.AirbnbPrimary
+import com.example.alquigo.ui.theme.BorderLight
 import com.example.alquigo.ui.theme.TextPrimary
 import com.example.alquigo.ui.theme.TextSecondary
 import dev.chrisbanes.haze.HazeState
@@ -32,12 +36,15 @@ fun PropertyCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     estado: String? = null,
+    isFavorite: Boolean = false,
     hazeState: HazeState? = null,
     onFavoriteClick: (() -> Unit)? = null
 ) {
+    var localIsFavorite by remember(property.id, isFavorite) { mutableStateOf(isFavorite) }
+    val favState = if (onFavoriteClick != null) isFavorite else localIsFavorite
+
     Column(
         modifier = modifier
-            .width(170.dp)
             .clickable { onClick() }
     ) {
         // Foto
@@ -45,12 +52,13 @@ fun PropertyCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(165.dp)
-                .clip(RoundedCornerShape(24.dp))
+                .clip(RoundedCornerShape(20.dp))
+                .border(0.5.dp, BorderLight, RoundedCornerShape(20.dp))
                 .background(Color(0xFFF0F0F0))
         ) {
             if (property.imagenUri.isNotBlank()) {
                 SubcomposeAsyncImage(
-                    model = property.imagenUri,
+                    model = getImageModel(property.imagenUri),
                     contentDescription = property.titulo,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
@@ -109,49 +117,56 @@ fun PropertyCard(
                         .padding(top = 10.dp, start = 10.dp)
                         .clip(CircleShape)
                         .background(Color.White)
+                        .border(0.5.dp, BorderLight, CircleShape)
                         .padding(horizontal = 10.dp, vertical = 5.dp)
                 ) {
                     Text(
                         text = statusText,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
                         color = TextPrimary
                     )
                 }
             }
 
-            // Corazón BLANCO de 26dp en esquina superior derecha sin fondo
+            // Corazón en esquina superior derecha
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(top = 8.dp, end = 8.dp)
-                    .clickable { onFavoriteClick?.invoke() }
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.25f))
+                    .clickable {
+                        localIsFavorite = !localIsFavorite
+                        onFavoriteClick?.invoke()
+                    }
+                    .padding(6.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.FavoriteBorder,
+                    imageVector = if (favState) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                     contentDescription = "Favorito",
-                    tint = Color.White,
-                    modifier = Modifier.size(26.dp)
+                    tint = if (favState) Color(0xFFFF385C) else Color.White,
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Línea 1: Título 16sp Medium #222222 (máx 2 líneas)
+        // Línea 1: Título 16sp Bold
         Text(
             text = property.titulo.ifBlank { "Propiedad en ${property.direccion}" },
             fontSize = 16.sp,
-            fontWeight = FontWeight.Medium,
+            fontWeight = FontWeight.Bold,
             color = TextPrimary,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
 
-        // Línea 2: tipo · dirección 15sp #6A6A6A
+        // Línea 2: tipo · dirección 14sp
         Text(
             text = "${property.tipo} · ${property.direccion}",
-            fontSize = 15.sp,
+            fontSize = 14.sp,
             color = TextSecondary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -159,17 +174,17 @@ fun PropertyCard(
 
         Spacer(modifier = Modifier.height(2.dp))
 
-        // Línea 3: "S/ 100 por mes" 15sp #6A6A6A con monto en Medium #222222
+        // Línea 3: "S/ 100 por mes"
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = "${formatPrecio(property.precio)} ",
                 fontSize = 15.sp,
-                fontWeight = FontWeight.Medium,
-                color = TextPrimary
+                fontWeight = FontWeight.Bold,
+                color = AirbnbPrimary
             )
             Text(
                 text = "por mes",
-                fontSize = 15.sp,
+                fontSize = 14.sp,
                 color = TextSecondary
             )
         }

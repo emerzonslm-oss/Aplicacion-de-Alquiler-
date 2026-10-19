@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -32,6 +33,7 @@ import com.example.alquigo.ui.components.AvatarInitial
 import com.example.alquigo.ui.components.GlassChip
 import com.example.alquigo.ui.components.PrimaryButton
 import com.example.alquigo.ui.components.StatusBadge
+import com.example.alquigo.ui.components.getImageModel
 import com.example.alquigo.ui.components.formatPrecio
 import com.example.alquigo.ui.components.glassSurface
 import com.example.alquigo.ui.theme.*
@@ -102,11 +104,12 @@ fun PropertyDetailScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(280.dp)
+                .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
                 .background(Color(0xFFF0F0F0))
         ) {
             if (property.imagenUri.isNotBlank()) {
                 SubcomposeAsyncImage(
-                    model = property.imagenUri,
+                    model = getImageModel(property.imagenUri),
                     contentDescription = property.titulo,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
@@ -200,27 +203,37 @@ fun PropertyDetailScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             if (uiState.currentTenant != null) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    AvatarInitial(name = uiState.currentTenant!!.nombre, size = 64.dp, fontSize = 28)
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column {
-                        Text(
-                            text = uiState.currentTenant!!.nombre,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Outlined.Phone, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(text = uiState.currentTenant!!.telefono, fontSize = 15.sp, color = TextSecondary)
-                        }
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Outlined.Email, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(text = uiState.currentTenant!!.email, fontSize = 15.sp, color = TextSecondary)
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = CardShape,
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        AvatarInitial(name = uiState.currentTenant!!.nombre, size = 60.dp, fontSize = 26)
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column {
+                            Text(
+                                text = uiState.currentTenant!!.nombre,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Outlined.Phone, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(text = uiState.currentTenant!!.telefono, fontSize = 15.sp, color = TextSecondary)
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Outlined.Email, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(text = uiState.currentTenant!!.email, fontSize = 15.sp, color = TextSecondary)
+                            }
                         }
                     }
                 }

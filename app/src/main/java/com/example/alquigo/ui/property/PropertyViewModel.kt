@@ -12,7 +12,8 @@ data class PropertyUiState(
     val properties: List<Property> = emptyList(),
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
-    val selectedFilter: String = "Todos"
+    val selectedFilter: String = "Todos",
+    val favoritePropertyIds: Set<String> = emptySet()
 )
 
 class PropertyViewModel(
@@ -22,6 +23,20 @@ class PropertyViewModel(
     private val _uiState = mutableStateOf(PropertyUiState())
     val uiState: State<PropertyUiState> = _uiState
 
+    fun toggleFavorite(propertyId: String) {
+        val currentFavorites = _uiState.value.favoritePropertyIds.toMutableSet()
+        if (currentFavorites.contains(propertyId)) {
+            currentFavorites.remove(propertyId)
+        } else {
+            currentFavorites.add(propertyId)
+        }
+        _uiState.value = _uiState.value.copy(favoritePropertyIds = currentFavorites)
+
+        if (_uiState.value.selectedFilter == "Favoritos") {
+            loadProperties("Favoritos")
+        }
+    }
+
     fun loadProperties(filter: String = _uiState.value.selectedFilter) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
@@ -29,7 +44,7 @@ class PropertyViewModel(
                 errorMessage = null,
                 selectedFilter = filter
             )
-            val result = if (filter == "Todos") {
+            val result = if (filter == "Todos" || filter == "Favoritos") {
                 repository.getAllProperties()
             } else {
                 repository.getPropertiesByType(filter)
@@ -37,8 +52,13 @@ class PropertyViewModel(
 
             result.fold(
                 onSuccess = { propertiesList ->
+                    val filteredList = if (filter == "Favoritos") {
+                        propertiesList.filter { _uiState.value.favoritePropertyIds.contains(it.id) }
+                    } else {
+                        propertiesList
+                    }
                     _uiState.value = _uiState.value.copy(
-                        properties = propertiesList,
+                        properties = filteredList,
                         isLoading = false
                     )
                 },
