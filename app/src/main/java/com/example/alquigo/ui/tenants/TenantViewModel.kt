@@ -46,22 +46,27 @@ class TenantViewModel(
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
+        val cleanNombre = nombre.trim()
+        val cleanDni = dni.trim()
+        val cleanTelefono = telefono.trim()
+        val cleanEmail = email.trim()
+
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
 
-            // Validar existencia de DNI
-            val existsResult = repository.checkDniExists(dni)
+            // Validar existencia de DNI (sin duplicados)
+            val existsResult = repository.checkDniExists(cleanDni)
             if (existsResult.isSuccess && existsResult.getOrNull() == true) {
                 _uiState.value = _uiState.value.copy(isLoading = false)
-                onError("El DNI ya se encuentra registrado.")
+                onError("El DNI '$cleanDni' ya se encuentra registrado.")
                 return@launch
             }
 
             val tenant = Tenant(
-                nombre = nombre,
-                dni = dni,
-                telefono = telefono,
-                email = email
+                nombre = cleanNombre,
+                dni = cleanDni,
+                telefono = cleanTelefono,
+                email = cleanEmail
             )
 
             repository.saveTenant(tenant).fold(

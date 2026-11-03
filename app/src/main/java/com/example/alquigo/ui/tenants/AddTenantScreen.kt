@@ -91,20 +91,31 @@ fun AddTenantScreen(
             PrimaryButton(
                 text = "Registrar Inquilino",
                 onClick = {
-                    if (nombre.isBlank() || dni.isBlank() || telefono.isBlank() || email.isBlank()) {
-                        Toast.makeText(context, "Complete todos los campos.", Toast.LENGTH_SHORT).show()
-                    } else if (telefono.length != 9) {
-                        Toast.makeText(context, "El teléfono debe tener 9 dígitos.", Toast.LENGTH_SHORT).show()
-                    } else if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
-                        Toast.makeText(context, "Formato de correo inválido.", Toast.LENGTH_SHORT).show()
+                    val cleanNombre = nombre.trim()
+                    val cleanDni = dni.trim()
+                    val cleanTelefono = telefono.trim()
+                    val cleanEmail = email.trim()
+
+                    if (cleanNombre.isBlank() || cleanDni.isBlank() || cleanTelefono.isBlank() || cleanEmail.isBlank()) {
+                        Toast.makeText(context, "Por favor complete todos los campos obligatorios.", Toast.LENGTH_SHORT).show()
+                    } else if (cleanNombre.length < 3) {
+                        Toast.makeText(context, "El nombre completo debe tener al menos 3 caracteres.", Toast.LENGTH_SHORT).show()
+                    } else if (cleanDni.length != 8 || !cleanDni.all { it.isDigit() }) {
+                        Toast.makeText(context, "El DNI debe contener exactamente 8 dígitos numéricos.", Toast.LENGTH_LONG).show()
+                    } else if (cleanTelefono.length != 9 || !cleanTelefono.all { it.isDigit() }) {
+                        Toast.makeText(context, "El teléfono debe contener exactamente 9 dígitos numéricos.", Toast.LENGTH_LONG).show()
+                    } else if (!cleanTelefono.startsWith("9")) {
+                        Toast.makeText(context, "El teléfono debe iniciar con el dígito 9.", Toast.LENGTH_LONG).show()
+                    } else if (!android.util.Patterns.EMAIL_ADDRESS.matcher(cleanEmail).matches()) {
+                        Toast.makeText(context, "Ingrese un formato de correo electrónico válido.", Toast.LENGTH_SHORT).show()
                     } else {
                         viewModel.saveTenant(
-                            nombre = nombre,
-                            dni = dni,
-                            telefono = telefono,
-                            email = email,
+                            nombre = cleanNombre,
+                            dni = cleanDni,
+                            telefono = cleanTelefono,
+                            email = cleanEmail,
                             onSuccess = {
-                                Toast.makeText(context, "Inquilino registrado.", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "¡Inquilino registrado exitosamente!", Toast.LENGTH_SHORT).show()
                                 onNavigateBack()
                             },
                             onError = { error ->

@@ -39,11 +39,17 @@ val bottomNavItems = listOf(
     BottomNavItem("profile", "Perfil", Icons.Outlined.Person)
 )
 
+val tenantNavItems = listOf(
+    BottomNavItem("home", "Mi Alquiler", Icons.Outlined.Home),
+    BottomNavItem("profile", "Perfil", Icons.Outlined.Person)
+)
+
 @Composable
 fun GlassBottomBar(
     currentRoute: String,
     onNavigate: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    items: List<BottomNavItem> = bottomNavItems
 ) {
     Column(
         modifier = modifier
@@ -60,7 +66,7 @@ fun GlassBottomBar(
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            bottomNavItems.forEach { item ->
+            items.forEach { item ->
                 val isSelected = currentRoute == item.route
                 val tint = if (isSelected) AirbnbActive else TextSecondary
                 val fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal

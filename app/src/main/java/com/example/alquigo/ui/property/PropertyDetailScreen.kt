@@ -36,6 +36,7 @@ import com.example.alquigo.ui.components.StatusBadge
 import com.example.alquigo.ui.components.getImageModel
 import com.example.alquigo.ui.components.formatPrecio
 import com.example.alquigo.ui.components.glassSurface
+import com.example.alquigo.ui.components.parseFlexibleDate
 import com.example.alquigo.ui.theme.*
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -490,11 +491,22 @@ fun PropertyDetailScreen(
             confirmButton = {
                 Button(
                     onClick = {
+                        val cleanDate = paymentDateInput.trim()
+                        if (cleanDate.isBlank()) {
+                            Toast.makeText(context, "Por favor ingrese la fecha real de pago.", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        val parsedDate = parseFlexibleDate(cleanDate)
+                        if (parsedDate == null) {
+                            Toast.makeText(context, "Formato de fecha inválido. Ingrese una fecha válida (AAAA-MM-DD).", Toast.LENGTH_LONG).show()
+                            return@Button
+                        }
+
                         val payId = payment.id
                         selectedPaymentForPay = null
                         viewModel.markPaymentAsPaid(
                             paymentId = payId,
-                            fechaPagoReal = paymentDateInput,
+                            fechaPagoReal = cleanDate,
                             onSuccess = {
                                 Toast.makeText(context, "¡Pago registrado como PAGADO!", Toast.LENGTH_SHORT).show()
                             },

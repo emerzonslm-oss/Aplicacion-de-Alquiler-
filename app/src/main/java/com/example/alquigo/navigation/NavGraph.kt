@@ -21,6 +21,8 @@ import com.example.alquigo.ui.auth.LoginScreen
 import com.example.alquigo.ui.auth.RegisterScreen
 import com.example.alquigo.ui.auth.UiEvent
 import com.example.alquigo.ui.components.GlassBottomBar
+import com.example.alquigo.ui.components.bottomNavItems
+import com.example.alquigo.ui.components.tenantNavItems
 import com.example.alquigo.ui.home.HomeScreen
 import com.example.alquigo.ui.profile.EditProfileScreen
 import com.example.alquigo.ui.profile.ProfileScreen
@@ -113,6 +115,7 @@ fun NavGraph(
             composable(Screen.Home.route) {
                 HomeScreen(
                     propertyViewModel = propertyViewModel,
+                    authViewModel = viewModel,
                     onNavigateToAddProperty = { navController.navigate(Screen.AddProperty.route) },
                     onNavigateToPropertyList = { navController.navigate(Screen.PropertyList.route) },
                     onNavigateToPropertyDetail = { propertyId ->
@@ -200,8 +203,12 @@ fun NavGraph(
             }
         }
 
-        // Floating Liquid Glass Bottom Bar (Overlay superpuesto)
+        // Floating Bottom Bar
         if (currentRoute in showBottomBarRoutes) {
+            val userState by viewModel.userState
+            val isTenant = userState?.rol == "INQUILINO"
+            val barItems = if (isTenant) tenantNavItems else bottomNavItems
+
             GlassBottomBar(
                 currentRoute = currentRoute,
                 onNavigate = { targetRoute ->
@@ -215,7 +222,8 @@ fun NavGraph(
                         }
                     }
                 },
-                modifier = Modifier.align(Alignment.BottomCenter)
+                modifier = Modifier.align(Alignment.BottomCenter),
+                items = barItems
             )
         }
     }

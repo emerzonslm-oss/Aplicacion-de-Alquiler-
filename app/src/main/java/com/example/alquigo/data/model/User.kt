@@ -6,5 +6,6 @@ data class User(
     val apellido: String = "",
     val email: String = "",
     val telefono: String = "",
-    val direcion : String =""
+    val direcion: String = "",
+    val rol: String = "PROPIETARIO" // "PROPIETARIO", "INQUILINO"
 )

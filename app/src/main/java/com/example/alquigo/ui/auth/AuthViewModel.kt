@@ -107,7 +107,8 @@ class AuthViewModel(private val repository: AuthRepository = AuthRepository()) :
         email: String,
         telefono: String,
         contrasena: String,
-        confirmarContrasena: String
+        confirmarContrasena: String,
+        rol: String = "PROPIETARIO"
     ) {
         if (nombre.isBlank() || apellido.isBlank() || email.isBlank() || telefono.isBlank() || contrasena.isBlank()) {
             _authState.value = AuthState.Error("Por favor complete todos los campos")
@@ -119,22 +120,27 @@ class AuthViewModel(private val repository: AuthRepository = AuthRepository()) :
             return
         }
 
-        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
             _authState.value = AuthState.Error("Formato de correo inválido")
             return
         }
-        if (contrasena.length <6){
-            _authState.value = AuthState.Error("La contraseña es muy pequeña")
+        if (contrasena.length < 6) {
+            _authState.value = AuthState.Error("La contraseña debe tener al menos 6 caracteres")
             return
         }
-        if (telefono.length !=9) {
-            _authState.value =
-                AuthState.Error("La cantidad de numeros del telefono no es la suficiente ")
+        if (telefono.trim().length != 9) {
+            _authState.value = AuthState.Error("El teléfono debe tener 9 dígitos")
             return
         }
         viewModelScope.launch {
             _authState.value = AuthState.Loading
-            val user = User(nombre = nombre, apellido = apellido, email = email, telefono = telefono)
+            val user = User(
+                nombre = nombre.trim(),
+                apellido = apellido.trim(),
+                email = email.trim(),
+                telefono = telefono.trim(),
+                rol = rol
+            )
             repository.register(user, contrasena).fold(
                 onSuccess = {
                     loadUserProfile()

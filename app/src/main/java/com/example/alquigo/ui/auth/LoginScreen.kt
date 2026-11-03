@@ -130,6 +130,8 @@ fun LoginScreen(
                         }
                     }
                 )
+                Spacer(modifier = Modifier.height(20.dp))
+
 
                 // Mensaje de Error en rojo #D70466
                 if (!errorMessage.isNullOrBlank()) {
@@ -173,34 +175,7 @@ fun LoginScreen(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // Botones Decorativos Google y Apple
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(56.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .border(1.dp, BorderLight, RoundedCornerShape(12.dp))
-                            .clickable { },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("🌐", fontSize = 22.sp)
-                    }
 
-                    Box(
-                        modifier = Modifier
-                            .size(56.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .border(1.dp, BorderLight, RoundedCornerShape(12.dp))
-                            .clickable { },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("🍎", fontSize = 22.sp)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
 
                 // Enlace a Registro
                 TextButton(onClick = onNavigateToRegister) {

@@ -1,8 +1,11 @@
 package com.example.alquigo.data.repository
 
 import com.example.alquigo.data.model.Contract
+import com.example.alquigo.data.model.DuePaymentInfo
 import com.example.alquigo.data.model.Payment
 import com.example.alquigo.data.model.Property
+import com.example.alquigo.ui.components.parseFlexibleDate
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.tasks.await
@@ -17,10 +20,18 @@ class PropertyRepository {
     private val contractsCollection = firestore.collection("contratos")
     private val paymentsCollection = firestore.collection("pagos")
 
+    private val currentUserId: String
+        get() = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+
     suspend fun saveProperty(property: Property): Result<Unit> {
         return try {
             val docRef = collection.document()
-            val propertyWithId = property.copy(id = docRef.id, estado = if (property.estado.isBlank()) "DISPONIBLE" else property.estado)
+            val ownerUid = property.userId.ifBlank { currentUserId }
+            val propertyWithId = property.copy(
+                id = docRef.id,
+                userId = ownerUid,
+                estado = if (property.estado.isBlank()) "DISPONIBLE" else property.estado
+            )
             docRef.set(propertyWithId).await()
             Result.success(Unit)
         } catch (e: Exception) {
@@ -32,7 +43,8 @@ class PropertyRepository {
         return try {
             val snapshot = collection.get().await()
             val properties = snapshot.toObjects(Property::class.java)
-            Result.success(properties)
+            val filtered = properties.filter { it.userId.isBlank() || it.userId == currentUserId }
+            Result.success(filtered)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -42,7 +54,8 @@ class PropertyRepository {
         return try {
             val snapshot = collection.whereEqualTo("tipo", tipo).get().await()
             val properties = snapshot.toObjects(Property::class.java)
-            Result.success(properties)
+            val filtered = properties.filter { it.userId.isBlank() || it.userId == currentUserId }
+            Result.success(filtered)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -265,5 +278,104 @@ class PropertyRepository {
         }
 
         return payments
+    }
+
+    suspend fun getDueAndOverduePaymentsForOwner(): Result<List<DuePaymentInfo>> {
+        return try {
+            val propertiesResult = getAllProperties()
+            val properties = propertiesResult.getOrNull() ?: emptyList()
+            val propertyMap = properties.associateBy { it.id }
+
+            if (properties.isEmpty()) {
+                return Result.success(emptyList())
+            }
+
+            val allPaymentsSnapshot = paymentsCollection
+                .whereEqualTo("estado", "PENDIENTE")
+                .get()
+                .await()
+            val pendingPayments = allPaymentsSnapshot.toObjects(Payment::class.java)
+                .filter { propertyMap.containsKey(it.propertyId) }
+
+            val today = LocalDate.now()
+            val limit7Days = today.plusDays(7)
+            val dueList = mutableListOf<DuePaymentInfo>()
+
+            for (payment in pendingPayments) {
+                val paymentDate = parseFlexibleDate(payment.fecha) ?: continue
+                val isOverdue = paymentDate.isBefore(today)
+                val isDueIn7Days = !paymentDate.isBefore(today) && !paymentDate.isAfter(limit7Days)
+
+                if (isOverdue || isDueIn7Days) {
+                    var tenantName = "Inquilino"
+                    var tenantPhone = ""
+
+                    if (payment.contractId.isNotBlank()) {
+                        try {
+                            val contractDoc = contractsCollection.document(payment.contractId).get().await()
+                            val tenantId = contractDoc.getString("tenantId") ?: ""
+                            if (tenantId.isNotBlank()) {
+                                val tenantDoc = firestore.collection("inquilinos").document(tenantId).get().await()
+                                tenantName = tenantDoc.getString("nombre") ?: "Inquilino"
+                                tenantPhone = tenantDoc.getString("telefono") ?: ""
+                            }
+                        } catch (_: Exception) {}
+                    }
+
+                    val prop = propertyMap[payment.propertyId]
+                    val daysDiff = java.time.temporal.ChronoUnit.DAYS.between(today, paymentDate)
+
+                    dueList.add(
+                        DuePaymentInfo(
+                            payment = payment,
+                            propertyTitle = prop?.titulo ?: "Propiedad",
+                            tenantName = tenantName,
+                            tenantPhone = tenantPhone,
+                            isOverdue = isOverdue,
+                            daysRemaining = daysDiff
+                        )
+                    )
+                }
+            }
+
+            dueList.sortBy { it.payment.fecha }
+            Result.success(dueList)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getMonthlyEarningsForOwner(): Result<Double> {
+        return try {
+            val propertiesResult = getAllProperties()
+            val properties = propertiesResult.getOrNull() ?: emptyList()
+            val ownerPropIds = properties.map { it.id }.toSet()
+
+            if (ownerPropIds.isEmpty()) return Result.success(0.0)
+
+            val snapshot = paymentsCollection
+                .whereEqualTo("estado", "PAGADO")
+                .get()
+                .await()
+            val paidPayments = snapshot.toObjects(Payment::class.java)
+                .filter { ownerPropIds.contains(it.propertyId) }
+
+            val now = LocalDate.now()
+            val currentYear = now.year
+            val currentMonth = now.monthValue
+
+            val monthlyTotal = paidPayments.sumOf { payment ->
+                val realDate = parseFlexibleDate(payment.fechaPagoReal) ?: parseFlexibleDate(payment.fecha)
+                if (realDate != null && realDate.year == currentYear && realDate.monthValue == currentMonth) {
+                    payment.monto
+                } else {
+                    0.0
+                }
+            }
+
+            Result.success(monthlyTotal)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 }

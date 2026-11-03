@@ -8,6 +8,7 @@ import com.example.alquigo.data.model.Property
 import com.example.alquigo.data.model.Tenant
 import com.example.alquigo.data.repository.PropertyRepository
 import com.example.alquigo.data.repository.TenantRepository
+import com.example.alquigo.ui.components.parseFlexibleDate
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -77,7 +78,12 @@ class AssignTenantViewModel(
         val property = state.property
 
         if (property == null) {
-            onError("Propiedad no válida.")
+            onError("Propiedad no encontrada.")
+            return
+        }
+
+        if (property.estado.equals("OCUPADA", ignoreCase = true)) {
+            onError("La propiedad ya se encuentra ocupada con un contrato activo.")
             return
         }
 
@@ -87,19 +93,44 @@ class AssignTenantViewModel(
             return
         }
 
-        if (state.fechaInicio.isBlank()) {
+        val cleanFechaInicio = state.fechaInicio.trim()
+        val cleanFechaFin = state.fechaFin.trim()
+
+        if (cleanFechaInicio.isBlank()) {
             onError("La fecha de inicio es requerida.")
             return
         }
 
-        if (state.fechaFin.isBlank()) {
+        if (cleanFechaFin.isBlank()) {
             onError("La fecha de fin es requerida.")
             return
         }
 
-        val monto = state.montoMensual.toDoubleOrNull()
+        val startDate = parseFlexibleDate(cleanFechaInicio)
+        if (startDate == null) {
+            onError("Formato de fecha de inicio inválido. Usa el formato AAAA-MM-DD (ej: 2026-05-01).")
+            return
+        }
+
+        val endDate = parseFlexibleDate(cleanFechaFin)
+        if (endDate == null) {
+            onError("Formato de fecha de fin inválido. Usa el formato AAAA-MM-DD (ej: 2027-05-01).")
+            return
+        }
+
+        if (!endDate.isAfter(startDate)) {
+            onError("La fecha de fin debe ser posterior a la fecha de inicio del contrato.")
+            return
+        }
+
+        val monto = state.montoMensual.trim().toDoubleOrNull()
         if (monto == null || monto <= 0) {
-            onError("Ingresa un monto mensual válido.")
+            onError("Ingresa un monto mensual válido mayor a cero.")
+            return
+        }
+
+        if (monto > 1000000.0) {
+            onError("El monto mensual no puede superar S/ 1,000,000.")
             return
         }
 
@@ -109,8 +140,8 @@ class AssignTenantViewModel(
             propertyRepository.createContractAndAssignTenant(
                 propertyId = property.id,
                 tenantId = tenant.id,
-                fechaInicio = state.fechaInicio,
-                fechaFin = state.fechaFin,
+                fechaInicio = cleanFechaInicio,
+                fechaFin = cleanFechaFin,
                 montoMensual = monto
             ).fold(
                 onSuccess = {

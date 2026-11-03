@@ -7,3 +7,10 @@ data class Tenant(
     val telefono: String = "",
     val email: String = ""
 )
+
+data class TenantRentalInfo(
+    val property: Property? = null,
+    val contract: Contract? = null,
+    val payments: List<Payment> = emptyList(),
+    val tenant: Tenant? = null
+)

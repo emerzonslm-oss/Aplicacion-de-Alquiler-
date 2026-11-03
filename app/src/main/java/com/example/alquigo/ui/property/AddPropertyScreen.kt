@@ -191,18 +191,30 @@ fun AddPropertyScreen(
             PrimaryButton(
                 text = "Registrar Propiedad",
                 onClick = {
-                    val precioDouble = precio.toDoubleOrNull()
+                    val cleanTitulo = titulo.trim()
+                    val cleanDescripcion = descripcion.trim()
+                    val cleanDireccion = direccion.trim()
+                    val cleanPrecioStr = precio.trim()
+                    val precioDouble = cleanPrecioStr.toDoubleOrNull()
 
-                    if (titulo.isBlank() || descripcion.isBlank() || precio.isBlank() || direccion.isBlank()) {
-                        Toast.makeText(context, "Por favor complete todos los campos obligatorios", Toast.LENGTH_SHORT).show()
+                    if (cleanTitulo.isBlank() || cleanDescripcion.isBlank() || cleanPrecioStr.isBlank() || cleanDireccion.isBlank()) {
+                        Toast.makeText(context, "Por favor complete todos los campos obligatorios.", Toast.LENGTH_SHORT).show()
+                    } else if (cleanTitulo.length < 3) {
+                        Toast.makeText(context, "El título debe contener al menos 3 caracteres.", Toast.LENGTH_SHORT).show()
+                    } else if (cleanDescripcion.length < 5) {
+                        Toast.makeText(context, "La descripción debe tener al menos 5 caracteres.", Toast.LENGTH_SHORT).show()
+                    } else if (cleanDireccion.length < 5) {
+                        Toast.makeText(context, "La dirección debe tener al menos 5 caracteres.", Toast.LENGTH_SHORT).show()
                     } else if (precioDouble == null || precioDouble <= 0) {
-                        Toast.makeText(context, "El precio por mes debe ser un número válido mayor a cero", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "El precio por mes debe ser un número válido mayor a cero.", Toast.LENGTH_LONG).show()
+                    } else if (precioDouble > 1000000.0) {
+                        Toast.makeText(context, "El precio por mes excede el monto máximo permitido (S/ 1,000,000).", Toast.LENGTH_LONG).show()
                     } else {
                         val nuevaPropiedad = Property(
-                            titulo = titulo,
-                            descripcion = descripcion,
+                            titulo = cleanTitulo,
+                            descripcion = cleanDescripcion,
                             precio = precioDouble,
-                            direccion = direccion,
+                            direccion = cleanDireccion,
                             tipo = tipo,
                             imagenUri = persistentImageUriString
                         )

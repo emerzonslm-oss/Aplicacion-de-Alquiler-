@@ -41,6 +41,7 @@ fun RegisterScreen(
     var contrasena by remember { mutableStateOf("") }
     var confirmarContrasena by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+    var selectedRol by remember { mutableStateOf("PROPIETARIO") }
 
     val isLoading = authState is AuthState.Loading
     val errorMessage = (authState as? AuthState.Error)?.message
@@ -161,6 +162,44 @@ fun RegisterScreen(
                     visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation()
                 )
 
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Selector de Rol (Propietario / Inquilino)
+                Text(
+                    text = "Tipo de usuario",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Start
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    FilterChip(
+                        selected = selectedRol == "PROPIETARIO",
+                        onClick = { selectedRol = "PROPIETARIO" },
+                        label = { Text("Propietario / Admin", fontWeight = FontWeight.SemiBold) },
+                        modifier = Modifier.weight(1f),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = AirbnbPrimary,
+                            selectedLabelColor = Color.White
+                        )
+                    )
+                    FilterChip(
+                        selected = selectedRol == "INQUILINO",
+                        onClick = { selectedRol = "INQUILINO" },
+                        label = { Text("Inquilino", fontWeight = FontWeight.SemiBold) },
+                        modifier = Modifier.weight(1f),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = AirbnbPrimary,
+                            selectedLabelColor = Color.White
+                        )
+                    )
+                }
+
                 if (!errorMessage.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
@@ -184,7 +223,8 @@ fun RegisterScreen(
                             email = email,
                             telefono = telefono,
                             contrasena = contrasena,
-                            confirmarContrasena = confirmarContrasena
+                            confirmarContrasena = confirmarContrasena,
+                            rol = selectedRol
                         )
                     },
                     isLoading = isLoading,

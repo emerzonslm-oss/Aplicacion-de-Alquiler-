@@ -4,20 +4,35 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.alquigo.data.model.DuePaymentInfo
 import com.example.alquigo.data.model.Property
+import com.example.alquigo.data.model.TenantRentalInfo
 import com.example.alquigo.data.repository.PropertyRepository
+import com.example.alquigo.data.repository.TenantRepository
 import kotlinx.coroutines.launch
+
+data class DashboardMetrics(
+    val totalProperties: Int = 0,
+    val occupiedProperties: Int = 0,
+    val availableProperties: Int = 0,
+    val occupancyPercentage: Int = 0,
+    val monthlyEarnings: Double = 0.0
+)
 
 data class PropertyUiState(
     val properties: List<Property> = emptyList(),
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val selectedFilter: String = "Todos",
-    val favoritePropertyIds: Set<String> = emptySet()
+    val favoritePropertyIds: Set<String> = emptySet(),
+    val metrics: DashboardMetrics = DashboardMetrics(),
+    val duePayments: List<DuePaymentInfo> = emptyList(),
+    val tenantRentalInfo: TenantRentalInfo? = null
 )
 
 class PropertyViewModel(
-    private val repository: PropertyRepository = PropertyRepository()
+    private val repository: PropertyRepository = PropertyRepository(),
+    private val tenantRepository: TenantRepository = TenantRepository()
 ) : ViewModel() {
 
     private val _uiState = mutableStateOf(PropertyUiState())
@@ -57,9 +72,29 @@ class PropertyViewModel(
                     } else {
                         propertiesList
                     }
+
+                    val totalProps = propertiesList.size
+                    val occupiedProps = propertiesList.count { it.estado.equals("OCUPADA", ignoreCase = true) }
+                    val availableProps = propertiesList.count { !it.estado.equals("OCUPADA", ignoreCase = true) }
+                    val percentage = if (totalProps > 0) ((occupiedProps.toDouble() / totalProps) * 100).toInt() else 0
+
+                    val duePaymentsResult = repository.getDueAndOverduePaymentsForOwner()
+                    val duePaymentsList = duePaymentsResult.getOrNull() ?: emptyList()
+
+                    val earningsResult = repository.getMonthlyEarningsForOwner()
+                    val monthlyTotal = earningsResult.getOrNull() ?: 0.0
+
                     _uiState.value = _uiState.value.copy(
                         properties = filteredList,
-                        isLoading = false
+                        isLoading = false,
+                        metrics = DashboardMetrics(
+                            totalProperties = totalProps,
+                            occupiedProperties = occupiedProps,
+                            availableProperties = availableProps,
+                            occupancyPercentage = percentage,
+                            monthlyEarnings = monthlyTotal
+                        ),
+                        duePayments = duePaymentsList
                     )
                 },
                 onFailure = { error ->
@@ -83,6 +118,26 @@ class PropertyViewModel(
                 onFailure = {
                     _uiState.value = _uiState.value.copy(isLoading = false)
                     onResult(null)
+                }
+            )
+        }
+    }
+
+    fun loadTenantRentalInfo(email: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true)
+            tenantRepository.getTenantRentalInfo(email).fold(
+                onSuccess = { info ->
+                    _uiState.value = _uiState.value.copy(
+                        tenantRentalInfo = info,
+                        isLoading = false
+                    )
+                },
+                onFailure = { error ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        errorMessage = error.message
+                    )
                 }
             )
         }
