@@ -7,6 +7,7 @@ data class Payment(
     val monto: Double = 0.0,
     val fecha: String = "",
     val fechaPagoReal: String = "",
+    val comprobanteUrl: String = "",
     val estado: String = "PENDIENTE", // "PENDIENTE", "PAGADO"
     val concepto: String = "Mensualidad"
 )

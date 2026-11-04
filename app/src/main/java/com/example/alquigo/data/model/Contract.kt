@@ -9,3 +9,10 @@ data class Contract(
     val montoMensual: Double = 0.0,
     val estado: String = "ACTIVO" // "ACTIVO", "INACTIVO", "FINALIZADO"
 )
+
+data class ContractHistoryInfo(
+    val contract: Contract = Contract(),
+    val tenantName: String = "",
+    val tenantPhone: String = "",
+    val tenantEmail: String = ""
+)

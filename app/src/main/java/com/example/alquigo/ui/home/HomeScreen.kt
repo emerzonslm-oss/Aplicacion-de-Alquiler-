@@ -1,5 +1,10 @@
 package com.example.alquigo.ui.home
 
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -8,11 +13,13 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.HomeWork
+import androidx.compose.material.icons.outlined.Receipt
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,13 +28,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import com.example.alquigo.data.model.DuePaymentInfo
+import com.example.alquigo.data.model.Payment
 import com.example.alquigo.data.model.User
 import com.example.alquigo.ui.auth.AuthViewModel
 import com.example.alquigo.ui.components.*
@@ -36,6 +47,8 @@ import com.example.alquigo.ui.property.PropertyViewModel
 import com.example.alquigo.ui.theme.*
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 @Composable
 fun HomeScreen(
@@ -48,19 +61,24 @@ fun HomeScreen(
 ) {
     val uiState by propertyViewModel.uiState
     val userState by authViewModel?.userState ?: remember { mutableStateOf<User?>(null) }
-    val isTenant = userState?.rol == "INQUILINO"
+    val isTenantMode = userState?.rol == "INQUILINO"
     val userEmail = userState?.email ?: com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email ?: ""
 
-    if (isTenant) {
+    if (isTenantMode) {
         LaunchedEffect(userEmail) {
             if (userEmail.isNotBlank()) {
                 propertyViewModel.loadTenantRentalInfo(userEmail)
             }
+            propertyViewModel.loadProperties()
         }
         TenantHomeScreenView(
             uiState = uiState,
             user = userState,
-            hazeState = hazeState
+            propertyViewModel = propertyViewModel,
+            hazeState = hazeState,
+            onNavigateToPropertyDetail = onNavigateToPropertyDetail,
+            onNavigateToPropertyList = onNavigateToPropertyList,
+            onSelectFilter = { category -> propertyViewModel.loadProperties(category) }
         )
         return
     }
@@ -649,15 +667,36 @@ fun DuePaymentsWhatsAppSection(
 fun TenantHomeScreenView(
     uiState: com.example.alquigo.ui.property.PropertyUiState,
     user: User?,
-    hazeState: HazeState? = null
+    propertyViewModel: PropertyViewModel? = null,
+    hazeState: HazeState? = null,
+    onNavigateToPropertyDetail: (String) -> Unit = {},
+    onNavigateToPropertyList: () -> Unit = {},
+    onSelectFilter: (String) -> Unit = {}
 ) {
     val info = uiState.tenantRentalInfo
     val property = info?.property
     val contract = info?.contract
     val payments = info?.payments ?: emptyList()
 
+    val context = LocalContext.current
+    var selectedTenantPaymentForUpload by remember { mutableStateOf<Payment?>(null) }
+    var tenantVoucherUri by remember { mutableStateOf("") }
+    var tenantPaymentDateInput by remember { mutableStateOf(LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))) }
+    var selectedTenantVoucherForView by remember { mutableStateOf<String?>(null) }
+
+    val tenantVoucherPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val savedUri = compressAndConvertUriToBase64(context, uri)
+            tenantVoucherUri = savedUri
+            Toast.makeText(context, "Foto del comprobante seleccionada", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     val totalPagado = payments.filter { it.estado.equals("PAGADO", ignoreCase = true) }.sumOf { it.monto }
     val totalPendiente = payments.filter { it.estado.equals("PENDIENTE", ignoreCase = true) }.sumOf { it.monto }
+    val categories = listOf("Todos", "Favoritos", "Casa", "Apartamento", "Habitación", "Local Comercial")
 
     Column(
         modifier = Modifier
@@ -697,7 +736,32 @@ fun TenantHomeScreenView(
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Barra de Búsqueda Superior para Inquilino / Explorador
+        GlassSearchBar(
+            placeholder = "Busca una propiedad",
+            onClick = onNavigateToPropertyList,
+            hazeState = hazeState
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Chips Desplazables de Categorías
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(vertical = 4.dp)
+        ) {
+            items(categories) { category ->
+                GlassChip(
+                    text = category,
+                    isSelected = uiState.selectedFilter == category,
+                    onClick = { onSelectFilter(category) }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
 
         if (uiState.isLoading) {
             Box(
@@ -849,6 +913,7 @@ fun TenantHomeScreenView(
             Spacer(modifier = Modifier.height(16.dp))
 
             payments.forEach { payment ->
+                val isPending = payment.estado.equals("PENDIENTE", ignoreCase = true)
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -857,45 +922,89 @@ fun TenantHomeScreenView(
                     colors = CardDefaults.cardColors(containerColor = Color.White),
                     elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = payment.concepto,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Vencimiento: ${payment.fecha}",
-                                fontSize = 13.sp,
-                                color = TextSecondary
-                            )
-                            if (payment.estado.equals("PAGADO", ignoreCase = true) && payment.fechaPagoReal.isNotBlank()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Pagado el: ${payment.fechaPagoReal}",
-                                    fontSize = 12.sp,
-                                    color = PaidStatusText,
-                                    fontWeight = FontWeight.Medium
+                                    text = payment.concepto,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary
                                 )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Vencimiento: ${payment.fecha}",
+                                    fontSize = 13.sp,
+                                    color = TextSecondary
+                                )
+                                if (!isPending && payment.fechaPagoReal.isNotBlank()) {
+                                    Text(
+                                        text = "Pagado el: ${payment.fechaPagoReal}",
+                                        fontSize = 12.sp,
+                                        color = PaidStatusText,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    text = formatPrecio(payment.monto),
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                StatusBadge(status = payment.estado)
                             }
                         }
 
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                text = formatPrecio(payment.monto),
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            StatusBadge(status = payment.estado)
+                        if (isPending) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
+                            Spacer(modifier = Modifier.height(10.dp))
+                            OutlinedButton(
+                                onClick = {
+                                    selectedTenantPaymentForUpload = payment
+                                    tenantVoucherUri = ""
+                                    tenantPaymentDateInput = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = InputShape,
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = AirbnbPrimary)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Receipt,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Adjuntar Voucher de Pago", fontWeight = FontWeight.Bold)
+                            }
+                        } else if (payment.comprobanteUrl.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
+                            Spacer(modifier = Modifier.height(10.dp))
+                            OutlinedButton(
+                                onClick = {
+                                    selectedTenantVoucherForView = payment.comprobanteUrl
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = InputShape,
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Receipt,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Ver Comprobante", fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
@@ -917,5 +1026,211 @@ fun TenantHomeScreenView(
                 }
             }
         }
+
+        // 4. EXPLORAR INMUEBLES DISPONIBLES
+        Spacer(modifier = Modifier.height(28.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Explorar Inmuebles",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary
+            )
+            TextButton(onClick = onNavigateToPropertyList) {
+                Text("Ver todos", color = AirbnbPrimary, fontWeight = FontWeight.Bold)
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+
+        val disponiblesProps = uiState.properties.filter { !it.estado.equals("OCUPADA", ignoreCase = true) }
+        if (disponiblesProps.isNotEmpty()) {
+            disponiblesProps.take(4).forEach { prop ->
+                PropertyCard(
+                    property = prop,
+                    onClick = { onNavigateToPropertyDetail(prop.id) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp)
+                )
+            }
+        } else {
+            Text(
+                text = "No hay inmuebles disponibles en este momento.",
+                fontSize = 14.sp,
+                color = TextSecondary
+            )
+        }
+    }
+
+    // Modal para que el Inquilino adjunte Voucher de Pago
+    if (selectedTenantPaymentForUpload != null) {
+        val payment = selectedTenantPaymentForUpload!!
+        AlertDialog(
+            onDismissRequest = { selectedTenantPaymentForUpload = null },
+            shape = CardShape,
+            containerColor = Color.White,
+            title = {
+                Text(
+                    text = "Adjuntar Comprobante de Pago",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = TextPrimary
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Concepto: ${payment.concepto}",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Monto a Pagar: ${formatPrecio(payment.monto)}",
+                        fontSize = 15.sp,
+                        color = TextSecondary
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    AlquiTextField(
+                        value = tenantPaymentDateInput,
+                        onValueChange = { tenantPaymentDateInput = it },
+                        label = "Fecha de Realización del Pago (AAAA-MM-DD)"
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Foto del Voucher o Transferencia:",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(110.dp)
+                            .border(1.dp, BorderLight, InputShape)
+                            .clickable {
+                                tenantVoucherPickerLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                            },
+                        shape = InputShape,
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF7F7F7))
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            if (tenantVoucherUri.isNotBlank()) {
+                                AsyncImage(
+                                    model = getImageModel(tenantVoucherUri),
+                                    contentDescription = "Comprobante",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("📷", fontSize = 24.sp)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("Tocar para adjuntar foto del voucher", fontSize = 13.sp, color = TextSecondary)
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = { selectedTenantPaymentForUpload = null }) {
+                        Text("Cancelar", color = TextSecondary, fontWeight = FontWeight.SemiBold)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            val cleanDate = tenantPaymentDateInput.trim()
+                            if (cleanDate.isBlank()) {
+                                Toast.makeText(context, "Ingrese la fecha de realización del pago.", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            if (parseFlexibleDate(cleanDate) == null) {
+                                Toast.makeText(context, "Formato de fecha inválido (AAAA-MM-DD).", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            if (tenantVoucherUri.isBlank()) {
+                                Toast.makeText(context, "Por favor adjunte la foto del comprobante de pago.", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+
+                            val payId = payment.id
+                            val userEmailStr = user?.email ?: ""
+                            selectedTenantPaymentForUpload = null
+
+                            propertyViewModel?.uploadTenantPaymentVoucher(
+                                paymentId = payId,
+                                fechaPagoReal = cleanDate,
+                                comprobanteUrl = tenantVoucherUri,
+                                userEmail = userEmailStr,
+                                onSuccess = {
+                                    Toast.makeText(context, "¡Comprobante enviado al propietario!", Toast.LENGTH_SHORT).show()
+                                },
+                                onError = { err ->
+                                    Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                                }
+                            )
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AirbnbPrimary),
+                        shape = ButtonShape
+                    ) {
+                        Text("Enviar Comprobante", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        )
+    }
+
+    // Modal Lightbox para Ver Comprobante
+    if (selectedTenantVoucherForView != null) {
+        val voucherUrl = selectedTenantVoucherForView!!
+        AlertDialog(
+            onDismissRequest = { selectedTenantVoucherForView = null },
+            shape = CardShape,
+            containerColor = Color.White,
+            title = {
+                Text(
+                    text = "Comprobante de Pago",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = TextPrimary
+                )
+            },
+            text = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(280.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFFF5F5F5)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    SubcomposeAsyncImage(
+                        model = getImageModel(voucherUrl),
+                        contentDescription = "Comprobante de Pago",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { selectedTenantVoucherForView = null }) {
+                    Text("Cerrar", fontWeight = FontWeight.Bold, color = AirbnbPrimary)
+                }
+            }
+        )
     }
 }

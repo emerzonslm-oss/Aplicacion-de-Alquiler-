@@ -228,4 +228,27 @@ class PropertyViewModel(
             )
         }
     }
+
+    fun uploadTenantPaymentVoucher(
+        paymentId: String,
+        fechaPagoReal: String,
+        comprobanteUrl: String,
+        userEmail: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            repository.markPaymentAsPaid(paymentId, fechaPagoReal, comprobanteUrl).fold(
+                onSuccess = {
+                    if (userEmail.isNotBlank()) {
+                        loadTenantRentalInfo(userEmail)
+                    }
+                    onSuccess()
+                },
+                onFailure = { error ->
+                    onError(error.message ?: "Error al enviar el comprobante de pago")
+                }
+            )
+        }
+    }
 }

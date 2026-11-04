@@ -1,7 +1,13 @@
 package com.example.alquigo.ui.property
 
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -11,9 +17,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.HomeWork
 import androidx.compose.material.icons.outlined.Phone
+import androidx.compose.material.icons.outlined.Receipt
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,13 +35,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import com.example.alquigo.data.model.Payment
+import com.example.alquigo.data.model.User
+import com.example.alquigo.ui.auth.AuthViewModel
 import com.example.alquigo.ui.components.AlquiTextField
 import com.example.alquigo.ui.components.AvatarInitial
 import com.example.alquigo.ui.components.GlassChip
 import com.example.alquigo.ui.components.PrimaryButton
 import com.example.alquigo.ui.components.StatusBadge
+import com.example.alquigo.ui.components.compressAndConvertUriToBase64
 import com.example.alquigo.ui.components.getImageModel
 import com.example.alquigo.ui.components.formatPrecio
 import com.example.alquigo.ui.components.glassSurface
@@ -44,16 +57,35 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun PropertyDetailScreen(
     propertyId: String,
+    authViewModel: AuthViewModel? = null,
     onNavigateBack: () -> Unit,
     onNavigateToAssignTenant: (String) -> Unit = {},
     viewModel: PropertyDetailViewModel = viewModel()
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState
+    val userState by authViewModel?.userState ?: remember { mutableStateOf<User?>(null) }
+    val isOwnerMode = userState?.rol == "PROPIETARIO" || userState?.rol.isNullOrBlank()
 
     var paymentFilter by remember { mutableStateOf("Todos") }
     var selectedPaymentForPay by remember { mutableStateOf<Payment?>(null) }
     var paymentDateInput by remember { mutableStateOf(LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))) }
+
+    var paymentVoucherUri by remember { mutableStateOf("") }
+    var selectedVoucherImageForView by remember { mutableStateOf<String?>(null) }
+    var showRenewContractDialog by remember { mutableStateOf(false) }
+    var renewFechaFinInput by remember { mutableStateOf("") }
+    var renewMontoInput by remember { mutableStateOf("") }
+
+    val voucherPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val savedUri = compressAndConvertUriToBase64(context, uri)
+            paymentVoucherUri = savedUri
+            Toast.makeText(context, "Foto del comprobante cargada", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     LaunchedEffect(propertyId) {
         viewModel.loadPropertyDetail(propertyId)
@@ -282,6 +314,30 @@ fun PropertyDetailScreen(
                         if (contract.montoMensual > 0) {
                             Text(text = "Cuota mensual: ${formatPrecio(contract.montoMensual)}", fontSize = 15.sp, color = TextSecondary)
                         }
+                        if (isOwnerMode) {
+                            Spacer(modifier = Modifier.height(14.dp))
+                            OutlinedButton(
+                                onClick = {
+                                    val currentEnd = contract.fechaFin
+                                    val parsed = parseFlexibleDate(currentEnd)
+                                    val defaultNewEnd = parsed?.plusMonths(6)?.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) ?: ""
+                                    renewFechaFinInput = defaultNewEnd
+                                    renewMontoInput = if (contract.montoMensual > 0) contract.montoMensual.toInt().toString() else ""
+                                    showRenewContractDialog = true
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = InputShape,
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = AirbnbPrimary)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Refresh,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Renovar Contrato", fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
             } else {
@@ -291,17 +347,77 @@ fun PropertyDetailScreen(
                         fontSize = 16.sp,
                         color = TextSecondary
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    PrimaryButton(
-                        text = "Asignar Inquilino",
-                        onClick = { onNavigateToAssignTenant(property.id) },
-                        modifier = Modifier.fillMaxWidth().height(48.dp)
-                    )
+                    if (isOwnerMode) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        PrimaryButton(
+                            text = "Asignar Inquilino",
+                            onClick = { onNavigateToAssignTenant(property.id) },
+                            modifier = Modifier.fillMaxWidth().height(48.dp)
+                        )
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
             HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // SECCIÓN: Historial de Contratos
+            Text(
+                text = "Historial de contratos",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (uiState.contractHistory.isNotEmpty()) {
+                uiState.contractHistory.forEach { item ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp),
+                        shape = CardShape,
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = item.tenantName,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary
+                                )
+                                StatusBadge(status = item.contract.estado)
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Periodo: ${item.contract.fechaInicio} al ${item.contract.fechaFin}",
+                                fontSize = 14.sp,
+                                color = TextSecondary
+                            )
+                            if (item.contract.montoMensual > 0) {
+                                Text(
+                                    text = "Monto mensual: ${formatPrecio(item.contract.montoMensual)}",
+                                    fontSize = 14.sp,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
+                    }
+                }
+            } else {
+                Text(
+                    text = "No hay registro de contratos pasados.",
+                    fontSize = 16.sp,
+                    color = TextSecondary
+                )
+            }
             Spacer(modifier = Modifier.height(24.dp))
 
             // SECCIÓN: Historial de Pagos
@@ -415,13 +531,14 @@ fun PropertyDetailScreen(
                                 }
                             }
 
-                            if (isPending) {
+                            if (isOwnerMode && isPending) {
                                 Spacer(modifier = Modifier.height(12.dp))
                                 HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
                                 Spacer(modifier = Modifier.height(10.dp))
                                 OutlinedButton(
                                     onClick = {
                                         selectedPaymentForPay = payment
+                                        paymentVoucherUri = ""
                                         paymentDateInput = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
                                     },
                                     modifier = Modifier.fillMaxWidth(),
@@ -435,6 +552,26 @@ fun PropertyDetailScreen(
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text("Marcar como Pagado", fontWeight = FontWeight.Bold)
+                                }
+                            } else if (payment.comprobanteUrl.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
+                                Spacer(modifier = Modifier.height(10.dp))
+                                OutlinedButton(
+                                    onClick = {
+                                        selectedVoucherImageForView = payment.comprobanteUrl
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = InputShape,
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Receipt,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Ver Comprobante", fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -458,6 +595,7 @@ fun PropertyDetailScreen(
         AlertDialog(
             onDismissRequest = { selectedPaymentForPay = null },
             shape = CardShape,
+            containerColor = Color.White,
             title = {
                 Text(
                     text = "Confirmar Recepción de Pago",
@@ -486,43 +624,240 @@ fun PropertyDetailScreen(
                         onValueChange = { paymentDateInput = it },
                         label = "Fecha Real de Pago (AAAA-MM-DD)"
                     )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Foto del Comprobante (Voucher):",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(110.dp)
+                            .border(1.dp, BorderLight, InputShape)
+                            .clickable {
+                                voucherPickerLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                            },
+                        shape = InputShape,
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF7F7F7))
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            if (paymentVoucherUri.isNotBlank()) {
+                                AsyncImage(
+                                    model = getImageModel(paymentVoucherUri),
+                                    contentDescription = "Comprobante",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("📷", fontSize = 24.sp)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("Tocar para adjuntar foto del voucher", fontSize = 13.sp, color = TextSecondary)
+                                }
+                            }
+                        }
+                    }
                 }
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        val cleanDate = paymentDateInput.trim()
-                        if (cleanDate.isBlank()) {
-                            Toast.makeText(context, "Por favor ingrese la fecha real de pago.", Toast.LENGTH_SHORT).show()
-                            return@Button
-                        }
-                        val parsedDate = parseFlexibleDate(cleanDate)
-                        if (parsedDate == null) {
-                            Toast.makeText(context, "Formato de fecha inválido. Ingrese una fecha válida (AAAA-MM-DD).", Toast.LENGTH_LONG).show()
-                            return@Button
-                        }
-
-                        val payId = payment.id
-                        selectedPaymentForPay = null
-                        viewModel.markPaymentAsPaid(
-                            paymentId = payId,
-                            fechaPagoReal = cleanDate,
-                            onSuccess = {
-                                Toast.makeText(context, "¡Pago registrado como PAGADO!", Toast.LENGTH_SHORT).show()
-                            },
-                            onError = { error ->
-                                Toast.makeText(context, error, Toast.LENGTH_LONG).show()
-                            }
-                        )
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = AirbnbPrimary)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Confirmar Pago", fontWeight = FontWeight.Bold)
+                    TextButton(
+                        onClick = { selectedPaymentForPay = null }
+                    ) {
+                        Text("Cancelar", color = TextSecondary, fontWeight = FontWeight.SemiBold)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            val cleanDate = paymentDateInput.trim()
+                            if (cleanDate.isBlank()) {
+                                Toast.makeText(context, "Por favor ingrese la fecha real de pago.", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            val parsedDate = parseFlexibleDate(cleanDate)
+                            if (parsedDate == null) {
+                                Toast.makeText(context, "Formato de fecha inválido. Ingrese una fecha válida (AAAA-MM-DD).", Toast.LENGTH_LONG).show()
+                                return@Button
+                            }
+
+                            val payId = payment.id
+                            selectedPaymentForPay = null
+                            viewModel.markPaymentAsPaid(
+                                paymentId = payId,
+                                fechaPagoReal = cleanDate,
+                                comprobanteUrl = paymentVoucherUri,
+                                onSuccess = {
+                                    Toast.makeText(context, "¡Pago registrado como PAGADO!", Toast.LENGTH_SHORT).show()
+
+                                    val tenantEmail = uiState.currentTenant?.email ?: ""
+                                    val tenantName = uiState.currentTenant?.nombre ?: "Inquilino"
+                                    val propTitle = uiState.property?.titulo ?: "Propiedad"
+                                    val montoStr = formatPrecio(payment.monto)
+
+                                    if (tenantEmail.isNotBlank()) {
+                                        val subject = "Comprobante de Pago Recibido - AlquiGo ($propTitle)"
+                                        val body = "Hola $tenantName,\n\nConfirmamos la recepción de tu pago por un monto de $montoStr (${payment.concepto}) correspondiente a la propiedad '$propTitle', registrado con fecha $cleanDate.\n\n¡Muchas gracias por tu pago!\n\nAtentamente,\nAlquiGo"
+                                        val emailIntent = Intent(Intent.ACTION_SENDTO).apply {
+                                            data = Uri.parse("mailto:$tenantEmail")
+                                            putExtra(Intent.EXTRA_SUBJECT, subject)
+                                            putExtra(Intent.EXTRA_TEXT, body)
+                                        }
+                                        try {
+                                            context.startActivity(Intent.createChooser(emailIntent, "Enviar correo al inquilino"))
+                                        } catch (_: Exception) {
+                                            Toast.makeText(context, "No se pudo abrir la aplicación de correo.", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                },
+                                onError = { error ->
+                                    Toast.makeText(context, error, Toast.LENGTH_LONG).show()
+                                }
+                            )
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AirbnbPrimary),
+                        shape = ButtonShape
+                    ) {
+                        Text("Confirmar Pago", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        )
+    }
+
+    // Modal para Renovar Contrato
+    if (showRenewContractDialog && uiState.activeContract != null) {
+        val activeContract = uiState.activeContract!!
+        AlertDialog(
+            onDismissRequest = { showRenewContractDialog = false },
+            shape = CardShape,
+            containerColor = Color.White,
+            title = {
+                Text(
+                    text = "Renovar Contrato de Alquiler",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = TextPrimary
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Periodo actual: ${activeContract.fechaInicio} al ${activeContract.fechaFin}",
+                        fontSize = 14.sp,
+                        color = TextSecondary
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    AlquiTextField(
+                        value = renewFechaFinInput,
+                        onValueChange = { renewFechaFinInput = it },
+                        label = "Nueva Fecha de Fin (AAAA-MM-DD)"
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    AlquiTextField(
+                        value = renewMontoInput,
+                        onValueChange = { renewMontoInput = it },
+                        label = "Cuota Mensual (S/)"
+                    )
                 }
             },
-            dismissButton = {
-                TextButton(onClick = { selectedPaymentForPay = null }) {
-                    Text("Cancelar", color = TextSecondary)
+            confirmButton = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(
+                        onClick = { showRenewContractDialog = false }
+                    ) {
+                        Text("Cancelar", color = TextSecondary, fontWeight = FontWeight.SemiBold)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            val cleanDate = renewFechaFinInput.trim()
+                            val montoDouble = renewMontoInput.trim().toDoubleOrNull()
+
+                            if (cleanDate.isBlank()) {
+                                Toast.makeText(context, "Ingrese la nueva fecha de fin.", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            if (parseFlexibleDate(cleanDate) == null) {
+                                Toast.makeText(context, "Formato de fecha inválido (AAAA-MM-DD).", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            if (montoDouble == null || montoDouble <= 0) {
+                                Toast.makeText(context, "Ingrese un monto mensual válido mayor a cero.", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+
+                            val contractId = activeContract.id
+                            showRenewContractDialog = false
+                            viewModel.renewContract(
+                                contractId = contractId,
+                                nuevaFechaFin = cleanDate,
+                                nuevoMontoMensual = montoDouble,
+                                onSuccess = {
+                                    Toast.makeText(context, "¡Contrato renovado exitosamente!", Toast.LENGTH_SHORT).show()
+                                },
+                                onError = { err ->
+                                    Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                                }
+                            )
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AirbnbPrimary),
+                        shape = ButtonShape
+                    ) {
+                        Text("Confirmar Renovación", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        )
+    }
+
+    // Modal Lightbox para Ver Comprobante
+    if (selectedVoucherImageForView != null) {
+        val voucherUrl = selectedVoucherImageForView!!
+        AlertDialog(
+            onDismissRequest = { selectedVoucherImageForView = null },
+            shape = CardShape,
+            containerColor = Color.White,
+            title = {
+                Text(
+                    text = "Comprobante de Pago",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = TextPrimary
+                )
+            },
+            text = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(280.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFFF5F5F5)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    SubcomposeAsyncImage(
+                        model = getImageModel(voucherUrl),
+                        contentDescription = "Comprobante de Pago",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { selectedVoucherImageForView = null }) {
+                    Text("Cerrar", fontWeight = FontWeight.Bold, color = AirbnbPrimary)
                 }
             }
         )

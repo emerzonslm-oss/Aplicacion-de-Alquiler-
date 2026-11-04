@@ -1,6 +1,7 @@
 package com.example.alquigo.data.repository
 
 import com.example.alquigo.data.model.Contract
+import com.example.alquigo.data.model.ContractHistoryInfo
 import com.example.alquigo.data.model.DuePaymentInfo
 import com.example.alquigo.data.model.Payment
 import com.example.alquigo.data.model.Property
@@ -165,14 +166,113 @@ class PropertyRepository {
         }
     }
 
-    suspend fun markPaymentAsPaid(paymentId: String, fechaPagoReal: String): Result<Unit> {
+    suspend fun markPaymentAsPaid(paymentId: String, fechaPagoReal: String, comprobanteUrl: String = ""): Result<Unit> {
         return try {
-            paymentsCollection.document(paymentId).update(
-                mapOf(
-                    "estado" to "PAGADO",
-                    "fechaPagoReal" to fechaPagoReal
+            val updates = mutableMapOf<String, Any>(
+                "estado" to "PAGADO",
+                "fechaPagoReal" to fechaPagoReal
+            )
+            if (comprobanteUrl.isNotBlank()) {
+                updates["comprobanteUrl"] = comprobanteUrl
+            }
+            paymentsCollection.document(paymentId).update(updates).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getContractHistoryForProperty(propertyId: String): Result<List<ContractHistoryInfo>> {
+        return try {
+            val snapshot = contractsCollection
+                .whereEqualTo("propertyId", propertyId)
+                .get()
+                .await()
+            val contracts = snapshot.toObjects(Contract::class.java)
+
+            val historyList = mutableListOf<ContractHistoryInfo>()
+            for (contract in contracts) {
+                var tenantName = "Inquilino"
+                var tenantPhone = ""
+                var tenantEmail = ""
+                if (contract.tenantId.isNotBlank()) {
+                    try {
+                        val tenantDoc = firestore.collection("inquilinos").document(contract.tenantId).get().await()
+                        tenantName = tenantDoc.getString("nombre") ?: "Inquilino"
+                        tenantPhone = tenantDoc.getString("telefono") ?: ""
+                        tenantEmail = tenantDoc.getString("email") ?: ""
+                    } catch (_: Exception) {}
+                }
+                historyList.add(
+                    ContractHistoryInfo(
+                        contract = contract,
+                        tenantName = tenantName,
+                        tenantPhone = tenantPhone,
+                        tenantEmail = tenantEmail
+                    )
                 )
-            ).await()
+            }
+            historyList.sortByDescending { it.contract.fechaFin }
+            Result.success(historyList)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun renewContract(
+        contractId: String,
+        nuevaFechaFin: String,
+        nuevoMontoMensual: Double? = null
+    ): Result<Unit> {
+        return try {
+            val contractDoc = contractsCollection.document(contractId).get().await()
+            val currentContract = contractDoc.toObject(Contract::class.java)
+                ?: return Result.failure(Exception("Contrato no encontrado"))
+
+            val oldFechaFinStr = currentContract.fechaFin
+            val montoMensual = nuevoMontoMensual ?: currentContract.montoMensual
+
+            val formatters = listOf(
+                DateTimeFormatter.ofPattern("yyyy-MM-dd"),
+                DateTimeFormatter.ofPattern("dd/MM/yyyy"),
+                DateTimeFormatter.ofPattern("yyyy/MM/dd")
+            )
+            fun parseDate(str: String): LocalDate {
+                for (fmt in formatters) {
+                    try {
+                        return LocalDate.parse(str.trim(), fmt)
+                    } catch (_: Exception) {}
+                }
+                return LocalDate.now()
+            }
+
+            val oldEnd = parseDate(oldFechaFinStr)
+            val nextStart = oldEnd.plusMonths(1)
+            val nextStartStr = nextStart.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+
+            val batch = firestore.batch()
+
+            val contractRef = contractsCollection.document(contractId)
+            batch.update(contractRef, mapOf(
+                "fechaFin" to nuevaFechaFin,
+                "montoMensual" to montoMensual
+            ))
+
+            val newPayments = generateMonthlyPayments(
+                contractId = contractId,
+                propertyId = currentContract.propertyId,
+                montoMensual = montoMensual,
+                fechaInicioStr = nextStartStr,
+                fechaFinStr = nuevaFechaFin
+            )
+
+            for (payment in newPayments) {
+                val paymentRef = paymentsCollection.document()
+                val paymentWithId = payment.copy(id = paymentRef.id)
+                batch.set(paymentRef, paymentWithId)
+            }
+
+            batch.commit().await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)

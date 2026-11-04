@@ -23,6 +23,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,6 +64,8 @@ fun ProfileScreen(
         else -> "Usuario AlquiGo"
     }
     val userInitial = userName.take(1).uppercase()
+
+    val userRoleTitle = if (userState?.rol == "INQUILINO") "Inquilino" else "Propietario / Admin"
 
     Column(
         modifier = Modifier
@@ -135,7 +140,7 @@ fun ProfileScreen(
                     color = TextPrimary
                 )
                 Text(
-                    text = "Propietario",
+                    text = userRoleTitle,
                     fontSize = 14.sp,
                     color = TextSecondary
                 )
@@ -143,7 +148,6 @@ fun ProfileScreen(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
-
 
         // Configuración de la cuenta
         Row(

@@ -23,18 +23,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.alquigo.data.model.Property
+import com.example.alquigo.data.model.User
+import com.example.alquigo.ui.auth.AuthViewModel
 import com.example.alquigo.ui.components.*
 import com.example.alquigo.ui.theme.*
 
 @Composable
 fun PropertyListScreen(
     viewModel: PropertyViewModel,
+    authViewModel: AuthViewModel? = null,
     onNavigateBack: () -> Unit,
     onNavigateToEditProperty: (String) -> Unit,
     onNavigateToPropertyDetail: (String) -> Unit
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState
+    val userState by authViewModel?.userState ?: remember { mutableStateOf<User?>(null) }
+    val isOwnerMode = userState?.rol == "PROPIETARIO" || userState?.rol.isNullOrBlank()
 
     val filters = listOf("Todos", "Favoritos", "Casa", "Apartamento", "Habitación", "Local Comercial")
 
@@ -182,41 +187,43 @@ fun PropertyListScreen(
                                 isFavorite = uiState.favoritePropertyIds.contains(property.id),
                                 onFavoriteClick = { viewModel.toggleFavorite(property.id) }
                             )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                TextButton(
-                                    onClick = { onNavigateToEditProperty(property.id) }
+                            if (isOwnerMode) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Edit,
-                                        contentDescription = "Editar",
-                                        tint = TextPrimary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Editar", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                                }
-                                Spacer(modifier = Modifier.width(8.dp))
-                                TextButton(
-                                    onClick = {
-                                        propertyToDelete = property
-                                        showDeleteConfirmationDialog = true
+                                    TextButton(
+                                        onClick = { onNavigateToEditProperty(property.id) }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Edit,
+                                            contentDescription = "Editar",
+                                            tint = TextPrimary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Editar", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                                     }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Delete,
-                                        contentDescription = "Eliminar",
-                                        tint = AirbnbPrimary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Eliminar", color = AirbnbPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    TextButton(
+                                        onClick = {
+                                            propertyToDelete = property
+                                            showDeleteConfirmationDialog = true
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Delete,
+                                            contentDescription = "Eliminar",
+                                            tint = AirbnbPrimary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Eliminar", color = AirbnbPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                                    }
                                 }
                             }
                         }

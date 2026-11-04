@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.alquigo.data.model.Contract
+import com.example.alquigo.data.model.ContractHistoryInfo
 import com.example.alquigo.data.model.Payment
 import com.example.alquigo.data.model.Property
 import com.example.alquigo.data.model.Tenant
@@ -18,6 +19,7 @@ data class PropertyDetailUiState(
     val activeContract: Contract? = null,
     val currentTenant: Tenant? = null,
     val recentPayments: List<Payment> = emptyList(),
+    val contractHistory: List<ContractHistoryInfo> = emptyList(),
     val errorMessage: String? = null
 )
 
@@ -68,12 +70,17 @@ class PropertyDetailViewModel(
                 payments = paymentsResult.getOrNull() ?: emptyList()
             }
 
+            // 5. Obtener Historial de Contratos de la Propiedad
+            val historyResult = propertyRepository.getContractHistoryForProperty(propertyId)
+            val contractHistory = historyResult.getOrNull() ?: emptyList()
+
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
                 property = property,
                 activeContract = contract,
                 currentTenant = tenant,
-                recentPayments = payments
+                recentPayments = payments,
+                contractHistory = contractHistory
             )
         }
     }
@@ -81,12 +88,13 @@ class PropertyDetailViewModel(
     fun markPaymentAsPaid(
         paymentId: String,
         fechaPagoReal: String,
+        comprobanteUrl: String = "",
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
         viewModelScope.launch {
             val propertyId = _uiState.value.property?.id ?: ""
-            propertyRepository.markPaymentAsPaid(paymentId, fechaPagoReal).fold(
+            propertyRepository.markPaymentAsPaid(paymentId, fechaPagoReal, comprobanteUrl).fold(
                 onSuccess = {
                     if (propertyId.isNotBlank()) {
                         loadPropertyDetail(propertyId)
@@ -95,6 +103,29 @@ class PropertyDetailViewModel(
                 },
                 onFailure = { error ->
                     onError(error.message ?: "Error al marcar el pago como pagado")
+                }
+            )
+        }
+    }
+
+    fun renewContract(
+        contractId: String,
+        nuevaFechaFin: String,
+        nuevoMontoMensual: Double? = null,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            val propertyId = _uiState.value.property?.id ?: ""
+            propertyRepository.renewContract(contractId, nuevaFechaFin, nuevoMontoMensual).fold(
+                onSuccess = {
+                    if (propertyId.isNotBlank()) {
+                        loadPropertyDetail(propertyId)
+                    }
+                    onSuccess()
+                },
+                onFailure = { error ->
+                    onError(error.message ?: "Error al renovar el contrato")
                 }
             )
         }
