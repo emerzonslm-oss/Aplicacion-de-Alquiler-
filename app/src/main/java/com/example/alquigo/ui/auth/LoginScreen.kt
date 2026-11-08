@@ -66,19 +66,7 @@ fun LoginScreen(
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Botón X arriba a la derecha
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    IconButton(onClick = { }) {
-                        Icon(
-                            imageVector = Icons.Outlined.Close,
-                            contentDescription = "Cerrar",
-                            tint = TextPrimary
-                        )
-                    }
-                }
+
 
                 Spacer(modifier = Modifier.height(8.dp))
 

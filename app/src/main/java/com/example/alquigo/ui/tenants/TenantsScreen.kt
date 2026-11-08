@@ -56,11 +56,7 @@ fun TenantsScreen(
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary
             )
-            PrimaryButton(
-                text = "Registrar",
-                onClick = onNavigateToAddTenant,
-                modifier = Modifier.width(130.dp).height(44.dp)
-            )
+
         }
 
         if (uiState.isLoading) {

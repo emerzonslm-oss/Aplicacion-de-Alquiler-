@@ -133,6 +133,7 @@ fun NavGraph(
             composable(Screen.PropertyList.route) {
                 PropertyListScreen(
                     viewModel = propertyViewModel,
+                    authViewModel = viewModel,
                     onNavigateBack = { navController.popBackStack() },
                     onNavigateToEditProperty = { propertyId ->
                         navController.navigate(Screen.EditProperty.createRoute(propertyId))
@@ -160,6 +161,8 @@ fun NavGraph(
                 val propertyId = backStackEntry.arguments?.getString("propertyId") ?: ""
                 PropertyDetailScreen(
                     propertyId = propertyId,
+                    authViewModel = viewModel,
+                    propertyViewModel = propertyViewModel,
                     onNavigateBack = { navController.popBackStack() },
                     onNavigateToAssignTenant = { propId ->
                         navController.navigate(Screen.AssignTenant.createRoute(propId))
