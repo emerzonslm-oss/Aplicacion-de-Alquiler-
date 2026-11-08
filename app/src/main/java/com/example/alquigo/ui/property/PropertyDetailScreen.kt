@@ -1,6 +1,5 @@
 package com.example.alquigo.ui.property
 
-import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -17,7 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.DateRange
+
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.HomeWork
 import androidx.compose.material.icons.outlined.Phone
@@ -38,6 +37,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import com.example.alquigo.data.model.Payment
+import com.example.alquigo.data.model.PropertyRequest
 import com.example.alquigo.data.model.User
 import com.example.alquigo.ui.auth.AuthViewModel
 import com.example.alquigo.ui.components.AlquiTextField
@@ -47,6 +47,7 @@ import com.example.alquigo.ui.components.PrimaryButton
 import com.example.alquigo.ui.components.StatusBadge
 import com.example.alquigo.ui.components.compressAndConvertUriToBase64
 import com.example.alquigo.ui.components.getImageModel
+import com.example.alquigo.ui.components.sendReceiptEmail
 import com.example.alquigo.ui.components.formatPrecio
 import com.example.alquigo.ui.components.glassSurface
 import com.example.alquigo.ui.components.parseFlexibleDate
@@ -60,12 +61,14 @@ fun PropertyDetailScreen(
     authViewModel: AuthViewModel? = null,
     onNavigateBack: () -> Unit,
     onNavigateToAssignTenant: (String) -> Unit = {},
-    viewModel: PropertyDetailViewModel = viewModel()
+    viewModel: PropertyDetailViewModel = viewModel(),
+    propertyViewModel: PropertyViewModel = viewModel()
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState
+    val mainUiState by propertyViewModel.uiState
     val userState by authViewModel?.userState ?: remember { mutableStateOf<User?>(null) }
-    val isOwnerMode = userState?.rol == "PROPIETARIO" || userState?.rol.isNullOrBlank()
+    val isTenant = userState?.rol == "INQUILINO"
 
     var paymentFilter by remember { mutableStateOf("Todos") }
     var selectedPaymentForPay by remember { mutableStateOf<Payment?>(null) }
@@ -77,6 +80,11 @@ fun PropertyDetailScreen(
     var renewFechaFinInput by remember { mutableStateOf("") }
     var renewMontoInput by remember { mutableStateOf("") }
 
+    var selectedRequestForApproval by remember { mutableStateOf<PropertyRequest?>(null) }
+    var approveFechaInicioInput by remember { mutableStateOf(LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))) }
+    var approveFechaFinInput by remember { mutableStateOf(LocalDate.now().plusMonths(6).format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))) }
+    var approveMontoInput by remember { mutableStateOf("") }
+
     val voucherPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
@@ -87,8 +95,15 @@ fun PropertyDetailScreen(
         }
     }
 
-    LaunchedEffect(propertyId) {
+    LaunchedEffect(propertyId, userState) {
         viewModel.loadPropertyDetail(propertyId)
+        if (isTenant) {
+            if (!userState?.uid.isNullOrBlank()) {
+                propertyViewModel.loadTenantRequests(userState!!.uid)
+            }
+        } else {
+            propertyViewModel.loadPendingRequests()
+        }
     }
 
     if (uiState.isLoading) {
@@ -226,95 +241,337 @@ fun PropertyDetailScreen(
             HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
             Spacer(modifier = Modifier.height(24.dp))
 
-            // SECCIÓN: Inquilino Actual
-            Text(
-                text = "Inquilino actual",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = TextPrimary
-            )
-            Spacer(modifier = Modifier.height(16.dp))
+            val tenantReqForThisProp = remember(mainUiState.tenantRequests, property.id) {
+                mainUiState.tenantRequests.find { it.propertyId == property.id }
+            }
+            val pendingReqsForThisProp = remember(mainUiState.pendingRequests, property.id) {
+                mainUiState.pendingRequests.filter { it.propertyId == property.id }
+            }
+            val isMyAssignedContract = isTenant && uiState.currentTenant?.email.equals(userState?.email, ignoreCase = true)
 
-            if (uiState.currentTenant != null) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = CardShape,
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+            if (isTenant) {
+                // ROL INQUILINO
+                if (!property.estado.equals("OCUPADA", ignoreCase = true)) {
+                    // Propiedad Disponible
+                    Text(
+                        text = "Solicitud de Alquiler",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    if (tenantReqForThisProp == null) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = CardShape,
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(20.dp)) {
+                                Text(
+                                    text = "¿Te interesa esta propiedad?",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Envía una solicitud de alquiler para que el Administrador revise tu propuesta.",
+                                    fontSize = 14.sp,
+                                    color = TextSecondary
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                PrimaryButton(
+                                    text = "Solicitar Propiedad",
+                                    onClick = {
+                                        propertyViewModel.sendPropertyRequest(
+                                            property = property,
+                                            tenantUid = userState?.uid ?: "",
+                                            tenantName = "${userState?.nombre} ${userState?.apellido}".trim(),
+                                            tenantEmail = userState?.email ?: "",
+                                            tenantPhone = userState?.telefono ?: "",
+                                            onSuccess = {
+                                                Toast.makeText(context, "¡Solicitud de propiedad enviada al Administrador!", Toast.LENGTH_LONG).show()
+                                            },
+                                            onError = { err ->
+                                                Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                                            }
+                                        )
+                                    },
+                                    modifier = Modifier.fillMaxWidth().height(48.dp)
+                                )
+                            }
+                        }
+                    } else {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = CardShape,
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Estado de tu Solicitud",
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextPrimary
+                                    )
+                                    StatusBadge(status = tenantReqForThisProp.estado)
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                val statusDesc = when (tenantReqForThisProp.estado) {
+                                    "PENDIENTE" -> "Tu solicitud enviada el ${tenantReqForThisProp.fechaSolicitud} se encuentra en revisión por el Administrador."
+                                    "APROBADA" -> "¡Felicidades! Tu solicitud fue aprobada. Revisa tu contrato de alquiler abajo."
+                                    "RECHAZADA" -> "Tu solicitud no fue aprobada por el Administrador."
+                                    else -> tenantReqForThisProp.estado
+                                }
+                                Text(text = statusDesc, fontSize = 14.sp, color = TextSecondary)
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
+                } else if (isMyAssignedContract) {
+                    // Propiedad Ocupada por ESTE inquilino -> Ver su contrato y sus pagos
+                    Text(
+                        text = "Mi Contrato Vigente",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    if (uiState.activeContract != null) {
+                        val contract = uiState.activeContract!!
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = CardShape,
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(text = "Periodo del contrato", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                    StatusBadge(status = contract.estado)
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(text = "• Inicio: ${contract.fechaInicio}", fontSize = 15.sp, color = TextSecondary)
+                                Text(text = "• Fin: ${contract.fechaFin}", fontSize = 15.sp, color = TextSecondary)
+                                if (contract.montoMensual > 0) {
+                                    Text(text = "• Cuota mensual: ${formatPrecio(contract.montoMensual)}", fontSize = 15.sp, color = TextSecondary)
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
+                } else {
+                    // Propiedad Ocupada por OTRO inquilino -> Mostrar información general sin datos privados
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = CardShape,
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                     ) {
-                        AvatarInitial(name = uiState.currentTenant!!.nombre, size = 60.dp, fontSize = 26)
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column {
+                        Column(modifier = Modifier.padding(20.dp)) {
                             Text(
-                                text = uiState.currentTenant!!.nombre,
-                                fontSize = 18.sp,
+                                text = "Propiedad Ocupada",
+                                fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = TextPrimary
                             )
                             Spacer(modifier = Modifier.height(4.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Outlined.Phone, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(text = uiState.currentTenant!!.telefono, fontSize = 15.sp, color = TextSecondary)
-                            }
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Outlined.Email, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(text = uiState.currentTenant!!.email, fontSize = 15.sp, color = TextSecondary)
+                            Text(
+                                text = "Esta propiedad se encuentra actualmente alquilada.",
+                                fontSize = 14.sp,
+                                color = TextSecondary
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+            } else {
+                // ROL ADMINISTRADOR
+                if (pendingReqsForThisProp.isNotEmpty()) {
+                    Text(
+                        text = "Solicitudes para esta propiedad",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    pendingReqsForThisProp.forEach { req ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 12.dp),
+                            shape = CardShape,
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = req.tenantName,
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = TextPrimary
+                                        )
+                                        Text(
+                                            text = "Email: ${req.tenantEmail} · Tel: ${req.tenantPhone}",
+                                            fontSize = 13.sp,
+                                            color = TextSecondary
+                                        )
+                                    }
+                                    StatusBadge(status = "PENDIENTE")
+                                }
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Button(
+                                        onClick = {
+                                            selectedRequestForApproval = req
+                                            approveMontoInput = if (req.propertyPrecio > 0) req.propertyPrecio.toInt().toString() else ""
+                                        },
+                                        modifier = Modifier.weight(1f).height(42.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = AirbnbPrimary),
+                                        shape = ButtonShape
+                                    ) {
+                                        Text("Aceptar Solicitud", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    }
+
+                                    OutlinedButton(
+                                        onClick = {
+                                            propertyViewModel.rejectRequest(
+                                                requestId = req.id,
+                                                onSuccess = {
+                                                    Toast.makeText(context, "Solicitud rechazada", Toast.LENGTH_SHORT).show()
+                                                    viewModel.loadPropertyDetail(propertyId)
+                                                },
+                                                onError = { err ->
+                                                    Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                                                }
+                                            )
+                                        },
+                                        modifier = Modifier.weight(1f).height(42.dp),
+                                        shape = ButtonShape
+                                    ) {
+                                        Text("Rechazar", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                    }
+                                }
                             }
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+                    HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
-            } else {
+
+                // Inquilino Actual (Admin)
                 Text(
-                    text = "Propiedad disponible - Sin inquilino",
-                    fontSize = 16.sp,
-                    color = TextSecondary
+                    text = "Inquilino actual",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextPrimary
                 )
-            }
+                Spacer(modifier = Modifier.height(16.dp))
 
-            Spacer(modifier = Modifier.height(24.dp))
-            HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // SECCIÓN: Contrato Vigente
-            Text(
-                text = "Contrato vigente",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = TextPrimary
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-
-            if (uiState.activeContract != null) {
-                val contract = uiState.activeContract!!
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = CardShape,
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
+                if (uiState.currentTenant != null) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = CardShape,
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(text = "Periodo del contrato", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                            StatusBadge(status = contract.estado)
+                            AvatarInitial(name = uiState.currentTenant!!.nombre, size = 60.dp, fontSize = 26)
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column {
+                                Text(
+                                    text = uiState.currentTenant!!.nombre,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Outlined.Phone, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(text = uiState.currentTenant!!.telefono, fontSize = 15.sp, color = TextSecondary)
+                                }
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Outlined.Email, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(text = uiState.currentTenant!!.email, fontSize = 15.sp, color = TextSecondary)
+                                }
+                            }
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(text = "Inicio: ${contract.fechaInicio}", fontSize = 15.sp, color = TextSecondary)
-                        Text(text = "Fin: ${contract.fechaFin}", fontSize = 15.sp, color = TextSecondary)
-                        if (contract.montoMensual > 0) {
-                            Text(text = "Cuota mensual: ${formatPrecio(contract.montoMensual)}", fontSize = 15.sp, color = TextSecondary)
-                        }
-                        if (isOwnerMode) {
+                    }
+                } else {
+                    Text(
+                        text = "Propiedad disponible - Sin inquilino",
+                        fontSize = 16.sp,
+                        color = TextSecondary
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+                HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Contrato Vigente (Admin)
+                Text(
+                    text = "Contrato vigente",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextPrimary
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (uiState.activeContract != null) {
+                    val contract = uiState.activeContract!!
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = CardShape,
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(text = "Periodo del contrato", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                StatusBadge(status = contract.estado)
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(text = "Inicio: ${contract.fechaInicio}", fontSize = 15.sp, color = TextSecondary)
+                            Text(text = "Fin: ${contract.fechaFin}", fontSize = 15.sp, color = TextSecondary)
+                            if (contract.montoMensual > 0) {
+                                Text(text = "Cuota mensual: ${formatPrecio(contract.montoMensual)}", fontSize = 15.sp, color = TextSecondary)
+                            }
                             Spacer(modifier = Modifier.height(14.dp))
                             OutlinedButton(
                                 onClick = {
@@ -339,15 +596,13 @@ fun PropertyDetailScreen(
                             }
                         }
                     }
-                }
-            } else {
-                Column {
-                    Text(
-                        text = "No hay ningún contrato activo.",
-                        fontSize = 16.sp,
-                        color = TextSecondary
-                    )
-                    if (isOwnerMode) {
+                } else {
+                    Column {
+                        Text(
+                            text = "No hay ningún contrato activo.",
+                            fontSize = 16.sp,
+                            color = TextSecondary
+                        )
                         Spacer(modifier = Modifier.height(16.dp))
                         PrimaryButton(
                             text = "Asignar Inquilino",
@@ -356,233 +611,231 @@ fun PropertyDetailScreen(
                         )
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(24.dp))
-            HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
-            Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(24.dp))
+                HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
+                Spacer(modifier = Modifier.height(24.dp))
 
-            // SECCIÓN: Historial de Contratos
-            Text(
-                text = "Historial de contratos",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = TextPrimary
-            )
-            Spacer(modifier = Modifier.height(16.dp))
+                // Historial de Contratos (Admin)
+                Text(
+                    text = "Historial de contratos",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextPrimary
+                )
+                Spacer(modifier = Modifier.height(16.dp))
 
-            if (uiState.contractHistory.isNotEmpty()) {
-                uiState.contractHistory.forEach { item ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 12.dp),
-                        shape = CardShape,
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
+                if (uiState.contractHistory.isNotEmpty()) {
+                    uiState.contractHistory.forEach { item ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 12.dp),
+                            shape = CardShape,
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = item.tenantName,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextPrimary
+                                    )
+                                    StatusBadge(status = item.contract.estado)
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
                                 Text(
-                                    text = item.tenantName,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = TextPrimary
-                                )
-                                StatusBadge(status = item.contract.estado)
-                            }
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = "Periodo: ${item.contract.fechaInicio} al ${item.contract.fechaFin}",
-                                fontSize = 14.sp,
-                                color = TextSecondary
-                            )
-                            if (item.contract.montoMensual > 0) {
-                                Text(
-                                    text = "Monto mensual: ${formatPrecio(item.contract.montoMensual)}",
+                                    text = "Periodo: ${item.contract.fechaInicio} al ${item.contract.fechaFin}",
                                     fontSize = 14.sp,
                                     color = TextSecondary
                                 )
-                            }
-                        }
-                    }
-                }
-            } else {
-                Text(
-                    text = "No hay registro de contratos pasados.",
-                    fontSize = 16.sp,
-                    color = TextSecondary
-                )
-            }
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // SECCIÓN: Historial de Pagos
-            Text(
-                text = "Historial de pagos",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = TextPrimary
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-
-            if (uiState.recentPayments.isNotEmpty()) {
-                // Tarjetas resumen de montos
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Card(
-                        modifier = Modifier.weight(1f),
-                        shape = CardShape,
-                        colors = CardDefaults.cardColors(containerColor = PaidStatusBg),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
-                            Text("Cobrado", fontSize = 13.sp, color = PaidStatusText, fontWeight = FontWeight.Medium)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(formatPrecio(totalRecaudado), fontSize = 18.sp, color = PaidStatusText, fontWeight = FontWeight.Bold)
-                        }
-                    }
-
-                    Card(
-                        modifier = Modifier.weight(1f),
-                        shape = CardShape,
-                        colors = CardDefaults.cardColors(containerColor = PendingStatusBg),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
-                            Text("Por cobrar", fontSize = 13.sp, color = PendingStatusText, fontWeight = FontWeight.Medium)
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(formatPrecio(totalPendiente), fontSize = 18.sp, color = PendingStatusText, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Fila de Filtros
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    listOf("Todos", "Pendientes", "Pagados").forEach { filterOption ->
-                        GlassChip(
-                            text = filterOption,
-                            isSelected = paymentFilter == filterOption,
-                            onClick = { paymentFilter = filterOption }
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                filteredPayments.forEach { payment ->
-                    val isPending = payment.estado.equals("PENDIENTE", ignoreCase = true)
-                    
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 12.dp),
-                        shape = CardShape,
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
+                                if (item.contract.montoMensual > 0) {
                                     Text(
-                                        text = payment.concepto,
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = TextPrimary
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = "Programado: ${payment.fecha}",
+                                        text = "Monto mensual: ${formatPrecio(item.contract.montoMensual)}",
                                         fontSize = 14.sp,
                                         color = TextSecondary
                                     )
-                                    if (!isPending && payment.fechaPagoReal.isNotBlank()) {
-                                        Text(
-                                            text = "Pagado el: ${payment.fechaPagoReal}",
-                                            fontSize = 13.sp,
-                                            color = PaidStatusText,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                    }
-                                }
-
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text(
-                                        text = formatPrecio(payment.monto),
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = TextPrimary
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    StatusBadge(status = payment.estado)
-                                }
-                            }
-
-                            if (isOwnerMode && isPending) {
-                                Spacer(modifier = Modifier.height(12.dp))
-                                HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
-                                Spacer(modifier = Modifier.height(10.dp))
-                                OutlinedButton(
-                                    onClick = {
-                                        selectedPaymentForPay = payment
-                                        paymentVoucherUri = ""
-                                        paymentDateInput = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = InputShape,
-                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AirbnbPrimary)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.CheckCircle,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Marcar como Pagado", fontWeight = FontWeight.Bold)
-                                }
-                            } else if (payment.comprobanteUrl.isNotBlank()) {
-                                Spacer(modifier = Modifier.height(12.dp))
-                                HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
-                                Spacer(modifier = Modifier.height(10.dp))
-                                OutlinedButton(
-                                    onClick = {
-                                        selectedVoucherImageForView = payment.comprobanteUrl
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = InputShape,
-                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Receipt,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Ver Comprobante", fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
                     }
+                } else {
+                    Text(
+                        text = "No hay registro de contratos pasados.",
+                        fontSize = 16.sp,
+                        color = TextSecondary
+                    )
                 }
-            } else {
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Historial de Pagos (Admin)
                 Text(
-                    text = "No hay pagos registrados asociados a esta propiedad.",
-                    fontSize = 16.sp,
-                    color = TextSecondary
+                    text = "Historial de pagos",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextPrimary
                 )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (uiState.recentPayments.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Card(
+                            modifier = Modifier.weight(1f),
+                            shape = CardShape,
+                            colors = CardDefaults.cardColors(containerColor = PaidStatusBg),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Text("Cobrado", fontSize = 13.sp, color = PaidStatusText, fontWeight = FontWeight.Medium)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(formatPrecio(totalRecaudado), fontSize = 18.sp, color = PaidStatusText, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        Card(
+                            modifier = Modifier.weight(1f),
+                            shape = CardShape,
+                            colors = CardDefaults.cardColors(containerColor = PendingStatusBg),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Text("Por cobrar", fontSize = 13.sp, color = PendingStatusText, fontWeight = FontWeight.Medium)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(formatPrecio(totalPendiente), fontSize = 18.sp, color = PendingStatusText, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Fila de Filtros
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf("Todos", "Pendientes", "Pagados").forEach { filterOption ->
+                            GlassChip(
+                                text = filterOption,
+                                isSelected = paymentFilter == filterOption,
+                                onClick = { paymentFilter = filterOption }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    filteredPayments.forEach { payment ->
+                        val isPending = payment.estado.equals("PENDIENTE", ignoreCase = true)
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 12.dp),
+                            shape = CardShape,
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = payment.concepto,
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = TextPrimary
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = "Programado: ${payment.fecha}",
+                                            fontSize = 14.sp,
+                                            color = TextSecondary
+                                        )
+                                        if (!isPending && payment.fechaPagoReal.isNotBlank()) {
+                                            Text(
+                                                text = "Pagado el: ${payment.fechaPagoReal}",
+                                                fontSize = 13.sp,
+                                                color = PaidStatusText,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
+                                    }
+
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        Text(
+                                            text = formatPrecio(payment.monto),
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = TextPrimary
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        StatusBadge(status = payment.estado)
+                                    }
+                                }
+
+                                if (isPending) {
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    OutlinedButton(
+                                        onClick = {
+                                            selectedPaymentForPay = payment
+                                            paymentVoucherUri = ""
+                                            paymentDateInput = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = InputShape,
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = AirbnbPrimary)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.CheckCircle,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Marcar como Pagado", fontWeight = FontWeight.Bold)
+                                    }
+                                } else if (payment.comprobanteUrl.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    OutlinedButton(
+                                        onClick = {
+                                            selectedVoucherImageForView = payment.comprobanteUrl
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = InputShape,
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Receipt,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Ver Comprobante", fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Text(
+                        text = "No hay pagos registrados asociados a esta propiedad.",
+                        fontSize = 16.sp,
+                        color = TextSecondary
+                    )
+                }
             }
             
             Spacer(modifier = Modifier.height(40.dp))
@@ -703,20 +956,15 @@ fun PropertyDetailScreen(
                                     val propTitle = uiState.property?.titulo ?: "Propiedad"
                                     val montoStr = formatPrecio(payment.monto)
 
-                                    if (tenantEmail.isNotBlank()) {
-                                        val subject = "Comprobante de Pago Recibido - AlquiGo ($propTitle)"
-                                        val body = "Hola $tenantName,\n\nConfirmamos la recepción de tu pago por un monto de $montoStr (${payment.concepto}) correspondiente a la propiedad '$propTitle', registrado con fecha $cleanDate.\n\n¡Muchas gracias por tu pago!\n\nAtentamente,\nAlquiGo"
-                                        val emailIntent = Intent(Intent.ACTION_SENDTO).apply {
-                                            data = Uri.parse("mailto:$tenantEmail")
-                                            putExtra(Intent.EXTRA_SUBJECT, subject)
-                                            putExtra(Intent.EXTRA_TEXT, body)
-                                        }
-                                        try {
-                                            context.startActivity(Intent.createChooser(emailIntent, "Enviar correo al inquilino"))
-                                        } catch (_: Exception) {
-                                            Toast.makeText(context, "No se pudo abrir la aplicación de correo.", Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
+                                    sendReceiptEmail(
+                                        context = context,
+                                        tenantEmail = tenantEmail,
+                                        tenantName = tenantName,
+                                        propertyTitle = propTitle,
+                                        montoStr = montoStr,
+                                        concepto = payment.concepto,
+                                        fechaPagoReal = cleanDate
+                                    )
                                 },
                                 onError = { error ->
                                     Toast.makeText(context, error, Toast.LENGTH_LONG).show()
@@ -862,4 +1110,104 @@ fun PropertyDetailScreen(
             }
         )
     }
+
+    // Modal Aceptar Solicitud y Asignar Contrato
+    if (selectedRequestForApproval != null) {
+        val req = selectedRequestForApproval!!
+        AlertDialog(
+            onDismissRequest = { selectedRequestForApproval = null },
+            shape = CardShape,
+            containerColor = Color.White,
+            title = {
+                Text(
+                    text = "Aprobar Solicitud y Generar Contrato",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = TextPrimary
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Solicitante: ${req.tenantName}",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = "Email: ${req.tenantEmail}",
+                        fontSize = 13.sp,
+                        color = TextSecondary
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    AlquiTextField(
+                        value = approveFechaInicioInput,
+                        onValueChange = { approveFechaInicioInput = it },
+                        label = "Fecha de Inicio (AAAA-MM-DD)"
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    AlquiTextField(
+                        value = approveFechaFinInput,
+                        onValueChange = { approveFechaFinInput = it },
+                        label = "Fecha de Fin (AAAA-MM-DD)"
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    AlquiTextField(
+                        value = approveMontoInput,
+                        onValueChange = { approveMontoInput = it },
+                        label = "Monto Mensual (S/)"
+                    )
+                }
+            },
+            confirmButton = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = { selectedRequestForApproval = null }) {
+                        Text("Cancelar", color = TextSecondary, fontWeight = FontWeight.SemiBold)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            val cleanInicio = approveFechaInicioInput.trim()
+                            val cleanFin = approveFechaFinInput.trim()
+                            val montoD = approveMontoInput.trim().toDoubleOrNull()
+
+                            if (cleanInicio.isBlank() || cleanFin.isBlank()) {
+                                Toast.makeText(context, "Ingrese las fechas de contrato", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            if (montoD == null || montoD <= 0) {
+                                Toast.makeText(context, "Monto mensual inválido", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+
+                            val requestToApprove = req
+                            selectedRequestForApproval = null
+                            propertyViewModel.approveRequest(
+                                request = requestToApprove,
+                                fechaInicio = cleanInicio,
+                                fechaFin = cleanFin,
+                                montoMensual = montoD,
+                                onSuccess = {
+                                    Toast.makeText(context, "¡Solicitud aprobada y contrato creado!", Toast.LENGTH_SHORT).show()
+                                    viewModel.loadPropertyDetail(propertyId)
+                                },
+                                onError = { err ->
+                                    Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                                }
+                            )
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AirbnbPrimary),
+                        shape = ButtonShape
+                    ) {
+                        Text("Aprobar", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        )
+    }
 }
+

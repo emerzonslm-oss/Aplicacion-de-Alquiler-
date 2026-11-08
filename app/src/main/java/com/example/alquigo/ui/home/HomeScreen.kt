@@ -39,6 +39,7 @@ import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import com.example.alquigo.data.model.DuePaymentInfo
 import com.example.alquigo.data.model.Payment
+import com.example.alquigo.data.model.PropertyRequest
 import com.example.alquigo.data.model.User
 import com.example.alquigo.ui.auth.AuthViewModel
 import com.example.alquigo.ui.components.*
@@ -59,15 +60,24 @@ fun HomeScreen(
     onNavigateToPropertyDetail: (String) -> Unit,
     hazeState: HazeState? = null
 ) {
+    val context = LocalContext.current
     val uiState by propertyViewModel.uiState
     val userState by authViewModel?.userState ?: remember { mutableStateOf<User?>(null) }
     val isTenantMode = userState?.rol == "INQUILINO"
     val userEmail = userState?.email ?: com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email ?: ""
 
+    var selectedRequestForApproval by remember { mutableStateOf<PropertyRequest?>(null) }
+    var approveFechaInicioInput by remember { mutableStateOf(LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))) }
+    var approveFechaFinInput by remember { mutableStateOf(LocalDate.now().plusMonths(6).format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))) }
+    var approveMontoInput by remember { mutableStateOf("") }
+
     if (isTenantMode) {
-        LaunchedEffect(userEmail) {
+        LaunchedEffect(userEmail, userState?.uid) {
             if (userEmail.isNotBlank()) {
                 propertyViewModel.loadTenantRentalInfo(userEmail)
+            }
+            if (!userState?.uid.isNullOrBlank()) {
+                propertyViewModel.loadTenantRequests(userState!!.uid)
             }
             propertyViewModel.loadProperties()
         }
@@ -87,6 +97,7 @@ fun HomeScreen(
 
     LaunchedEffect(Unit) {
         propertyViewModel.loadProperties()
+        propertyViewModel.loadPendingRequests()
     }
 
     val disponiblesProps = remember(uiState.properties) {
@@ -201,6 +212,31 @@ fun HomeScreen(
         }
 
         Spacer(modifier = Modifier.height(28.dp))
+
+        // SOLICITUDES DE PROPIEDAD PENDIENTES (ROL ADMINISTRADOR)
+        if (uiState.pendingRequests.isNotEmpty()) {
+            Box(modifier = Modifier.padding(horizontal = 24.dp)) {
+                PendingRequestsAdminSection(
+                    pendingRequests = uiState.pendingRequests,
+                    onApproveClick = { req ->
+                        selectedRequestForApproval = req
+                        approveMontoInput = if (req.propertyPrecio > 0) req.propertyPrecio.toInt().toString() else ""
+                    },
+                    onRejectClick = { reqId ->
+                        propertyViewModel.rejectRequest(
+                            requestId = reqId,
+                            onSuccess = {
+                                Toast.makeText(context, "Solicitud rechazada", Toast.LENGTH_SHORT).show()
+                            },
+                            onError = { err ->
+                                Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                            }
+                        )
+                    }
+                )
+            }
+            Spacer(modifier = Modifier.height(28.dp))
+        }
 
         if (uiState.isLoading) {
             Box(
@@ -379,6 +415,220 @@ fun HomeScreen(
                             onFavoriteClick = { propertyViewModel.toggleFavorite(property.id) },
                             hazeState = hazeState
                         )
+                    }
+                }
+            }
+        }
+    }
+
+    // Modal para Aprobar Solicitud (Administrador)
+    if (selectedRequestForApproval != null) {
+        val req = selectedRequestForApproval!!
+        AlertDialog(
+            onDismissRequest = { selectedRequestForApproval = null },
+            shape = CardShape,
+            containerColor = Color.White,
+            title = {
+                Text(
+                    text = "Aprobar Solicitud de Alquiler",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = TextPrimary
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Inquilino: ${req.tenantName}",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = "Correo: ${req.tenantEmail} · Tel: ${req.tenantPhone}",
+                        fontSize = 13.sp,
+                        color = TextSecondary
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Propiedad: ${req.propertyTitle}",
+                        fontSize = 14.sp,
+                        color = TextSecondary
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    AlquiTextField(
+                        value = approveFechaInicioInput,
+                        onValueChange = { approveFechaInicioInput = it },
+                        label = "Fecha de Inicio (AAAA-MM-DD)"
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    AlquiTextField(
+                        value = approveFechaFinInput,
+                        onValueChange = { approveFechaFinInput = it },
+                        label = "Fecha de Fin (AAAA-MM-DD)"
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    AlquiTextField(
+                        value = approveMontoInput,
+                        onValueChange = { approveMontoInput = it },
+                        label = "Cuota Mensual (S/)"
+                    )
+                }
+            },
+            confirmButton = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = { selectedRequestForApproval = null }) {
+                        Text("Cancelar", color = TextSecondary, fontWeight = FontWeight.SemiBold)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            val cleanStart = approveFechaInicioInput.trim()
+                            val cleanEnd = approveFechaFinInput.trim()
+                            val montoDouble = approveMontoInput.trim().toDoubleOrNull() ?: 0.0
+
+                            if (cleanStart.isBlank() || cleanEnd.isBlank() || montoDouble <= 0) {
+                                Toast.makeText(context, "Por favor ingrese fechas y un monto válido.", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+
+                            val targetReq = req
+                            selectedRequestForApproval = null
+
+                            propertyViewModel.approveRequest(
+                                request = targetReq,
+                                fechaInicio = cleanStart,
+                                fechaFin = cleanEnd,
+                                montoMensual = montoDouble,
+                                onSuccess = {
+                                    Toast.makeText(context, "¡Solicitud aprobada y contrato creado exitosamente!", Toast.LENGTH_LONG).show()
+                                },
+                                onError = { error ->
+                                    Toast.makeText(context, error, Toast.LENGTH_LONG).show()
+                                }
+                            )
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AirbnbPrimary),
+                        shape = ButtonShape
+                    ) {
+                        Text("Aceptar y Crear Contrato", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun PendingRequestsAdminSection(
+    pendingRequests: List<PropertyRequest>,
+    onApproveClick: (PropertyRequest) -> Unit,
+    onRejectClick: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Solicitudes de Alquiler",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary
+            )
+            Surface(
+                shape = CircleShape,
+                color = AirbnbPrimary.copy(alpha = 0.1f)
+            ) {
+                Text(
+                    text = "${pendingRequests.size} pendientes",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = AirbnbPrimary,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            pendingRequests.forEach { req ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = CardShape,
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = req.tenantName.ifBlank { "Inquilino" },
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Propiedad: ${req.propertyTitle}",
+                                    fontSize = 14.sp,
+                                    color = TextSecondary
+                                )
+                            }
+                            StatusBadge(status = "PENDIENTE")
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Email: ${req.tenantEmail} · Tel: ${req.tenantPhone}",
+                            fontSize = 13.sp,
+                            color = TextSecondary
+                        )
+                        Text(
+                            text = "Fecha de solicitud: ${req.fechaSolicitud}",
+                            fontSize = 12.sp,
+                            color = TextSecondary
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Button(
+                                onClick = { onApproveClick(req) },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(42.dp),
+                                shape = ButtonShape,
+                                colors = ButtonDefaults.buttonColors(containerColor = AirbnbPrimary)
+                            ) {
+                                Text("Aceptar", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            }
+
+                            OutlinedButton(
+                                onClick = { onRejectClick(req.id) },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(42.dp),
+                                shape = ButtonShape,
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary)
+                            ) {
+                                Text("Rechazar", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                            }
+                        }
                     }
                 }
             }
@@ -773,6 +1023,64 @@ fun TenantHomeScreenView(
                 CircularProgressIndicator(color = AirbnbPrimary)
             }
             return
+        }
+
+        // SOLICITUDES DE ALQUILER REALIZADAS POR EL INQUILINO
+        if (uiState.tenantRequests.isNotEmpty()) {
+            Text(
+                text = "Mis Solicitudes de Alquiler",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            uiState.tenantRequests.forEach { req ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    shape = CardShape,
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = req.propertyTitle,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                            StatusBadge(status = req.estado)
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Fecha de solicitud: ${req.fechaSolicitud}",
+                            fontSize = 13.sp,
+                            color = TextSecondary
+                        )
+                        val statusText = when (req.estado) {
+                            "PENDIENTE" -> "En revisión por el Administrador"
+                            "APROBADA" -> "¡Solicitud Aprobada! Tu contrato fue asignado."
+                            "RECHAZADA" -> "Solicitud No Aprobada"
+                            else -> req.estado
+                        }
+                        Text(
+                            text = statusText,
+                            fontSize = 13.sp,
+                            color = if (req.estado == "APROBADA") PaidStatusText else TextSecondary,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
         }
 
         // 1. MI PROPIEDAD ALQUILADA

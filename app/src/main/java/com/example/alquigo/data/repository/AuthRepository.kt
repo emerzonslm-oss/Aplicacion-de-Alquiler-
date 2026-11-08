@@ -16,8 +16,24 @@ class AuthRepository {
             val result = auth.createUserWithEmailAndPassword(user.email, contrasena).await()
             val uid = result.user?.uid ?: throw Exception("Error al obtener UID")
             
-            val userData = user.copy(uid = uid)
+            // Forzar rol INQUILINO desde la lógica de negocio para registros públicos
+            val userData = user.copy(
+                uid = uid,
+                rol = "INQUILINO"
+            )
             firestore.collection("usuarios").document(uid).set(userData).await()
+            
+            // Crear automáticamente el registro en la colección "inquilinos"
+            // para que aparezca en el panel del Administrador -> Inquilinos
+            val tenantName = "${user.nombre} ${user.apellido}".trim()
+            val tenantData = mapOf(
+                "id" to uid,
+                "nombre" to tenantName.ifBlank { user.email.substringBefore("@") },
+                "dni" to "",
+                "telefono" to user.telefono,
+                "email" to user.email
+            )
+            firestore.collection("inquilinos").document(uid).set(tenantData).await()
             
             Result.success(uid)
         } catch (e: Exception) {

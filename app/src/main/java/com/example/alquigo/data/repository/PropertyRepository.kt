@@ -5,6 +5,9 @@ import com.example.alquigo.data.model.ContractHistoryInfo
 import com.example.alquigo.data.model.DuePaymentInfo
 import com.example.alquigo.data.model.Payment
 import com.example.alquigo.data.model.Property
+import com.example.alquigo.data.model.PropertyRequest
+import com.example.alquigo.data.model.Tenant
+import com.example.alquigo.data.model.User
 import com.example.alquigo.ui.components.parseFlexibleDate
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -20,9 +23,21 @@ class PropertyRepository {
     private val collection = firestore.collection("propiedades")
     private val contractsCollection = firestore.collection("contratos")
     private val paymentsCollection = firestore.collection("pagos")
+    private val requestsCollection = firestore.collection("solicitudes")
 
     private val currentUserId: String
         get() = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+
+    suspend fun isCurrentUserAdmin(): Boolean {
+        if (currentUserId.isBlank()) return false
+        return try {
+            val userDoc = firestore.collection("usuarios").document(currentUserId).get().await()
+            val rol = userDoc.getString("rol") ?: "INQUILINO"
+            rol != "INQUILINO"
+        } catch (e: Exception) {
+            false
+        }
+    }
 
     suspend fun saveProperty(property: Property): Result<Unit> {
         return try {
@@ -44,7 +59,12 @@ class PropertyRepository {
         return try {
             val snapshot = collection.get().await()
             val properties = snapshot.toObjects(Property::class.java)
-            val filtered = properties.filter { it.userId.isBlank() || it.userId == currentUserId }
+            val isAdmin = isCurrentUserAdmin()
+            val filtered = if (isAdmin) {
+                properties.filter { it.userId.isBlank() || it.userId == currentUserId }
+            } else {
+                properties
+            }
             Result.success(filtered)
         } catch (e: Exception) {
             Result.failure(e)
@@ -55,7 +75,12 @@ class PropertyRepository {
         return try {
             val snapshot = collection.whereEqualTo("tipo", tipo).get().await()
             val properties = snapshot.toObjects(Property::class.java)
-            val filtered = properties.filter { it.userId.isBlank() || it.userId == currentUserId }
+            val isAdmin = isCurrentUserAdmin()
+            val filtered = if (isAdmin) {
+                properties.filter { it.userId.isBlank() || it.userId == currentUserId }
+            } else {
+                properties
+            }
             Result.success(filtered)
         } catch (e: Exception) {
             Result.failure(e)
@@ -287,6 +312,9 @@ class PropertyRepository {
         montoMensual: Double
     ): Result<Unit> {
         return try {
+            if (!isCurrentUserAdmin()) {
+                return Result.failure(Exception("Permiso denegado: Solo el Administrador puede crear contratos y asignar propiedades."))
+            }
             val batch = firestore.batch()
 
             val contractRef = contractsCollection.document()
@@ -474,6 +502,158 @@ class PropertyRepository {
             }
 
             Result.success(monthlyTotal)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // --- GESTIÓN DE SOLICITUDES DE PROPIEDAD ---
+
+    suspend fun createPropertyRequest(request: PropertyRequest): Result<Unit> {
+        return try {
+            // Verificar si el inquilino ya tiene una solicitud pendiente o aprobada para esta propiedad
+            val existing = requestsCollection
+                .whereEqualTo("propertyId", request.propertyId)
+                .whereEqualTo("tenantUid", request.tenantUid)
+                .get()
+                .await()
+
+            val hasActiveRequest = existing.toObjects(PropertyRequest::class.java).any {
+                it.estado == "PENDIENTE" || it.estado == "APROBADA"
+            }
+
+            if (hasActiveRequest) {
+                return Result.failure(Exception("Ya cuentas con una solicitud pendiente o aprobada para esta propiedad."))
+            }
+
+            val docRef = requestsCollection.document()
+            val requestWithId = request.copy(
+                id = docRef.id,
+                fechaSolicitud = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")),
+                estado = "PENDIENTE"
+            )
+            docRef.set(requestWithId).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getRequestsForTenant(tenantUid: String): Result<List<PropertyRequest>> {
+        return try {
+            val snapshot = requestsCollection
+                .whereEqualTo("tenantUid", tenantUid)
+                .get()
+                .await()
+            val list = snapshot.toObjects(PropertyRequest::class.java).sortedByDescending { it.fechaSolicitud }
+            Result.success(list)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getRequestsForProperty(propertyId: String): Result<List<PropertyRequest>> {
+        return try {
+            val snapshot = requestsCollection
+                .whereEqualTo("propertyId", propertyId)
+                .get()
+                .await()
+            val list = snapshot.toObjects(PropertyRequest::class.java).sortedByDescending { it.fechaSolicitud }
+            Result.success(list)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getAllPendingRequests(): Result<List<PropertyRequest>> {
+        return try {
+            val snapshot = requestsCollection
+                .whereEqualTo("estado", "PENDIENTE")
+                .get()
+                .await()
+            val list = snapshot.toObjects(PropertyRequest::class.java).sortedByDescending { it.fechaSolicitud }
+            Result.success(list)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun approvePropertyRequest(
+        request: PropertyRequest,
+        fechaInicio: String,
+        fechaFin: String,
+        montoMensual: Double
+    ): Result<Unit> {
+        return try {
+            if (!isCurrentUserAdmin()) {
+                return Result.failure(Exception("Permiso denegado: Solo el Administrador puede aprobar solicitudes de propiedad."))
+            }
+
+            // 1. Buscar o registrar el inquilino en la colección "inquilinos"
+            var tenantId = request.tenantUid
+            val tenantsCollection = firestore.collection("inquilinos")
+            val tenantDoc = tenantsCollection.document(tenantId).get().await()
+
+            if (!tenantDoc.exists()) {
+                // Verificar por email si ya existe con otra ID
+                val emailSearch = tenantsCollection.whereEqualTo("email", request.tenantEmail).get().await()
+                if (!emailSearch.isEmpty) {
+                    tenantId = emailSearch.documents[0].id
+                } else {
+                    // Crear nuevo tenant
+                    val newTenant = Tenant(
+                        id = tenantId,
+                        nombre = request.tenantName,
+                        dni = "",
+                        telefono = request.tenantPhone,
+                        email = request.tenantEmail
+                    )
+                    tenantsCollection.document(tenantId).set(newTenant).await()
+                }
+            }
+
+            // 2. Crear contrato y asignar inquilino (lo cual también actualiza la propiedad a "OCUPADA")
+            val assignResult = createContractAndAssignTenant(
+                propertyId = request.propertyId,
+                tenantId = tenantId,
+                fechaInicio = fechaInicio,
+                fechaFin = fechaFin,
+                montoMensual = montoMensual
+            )
+
+            if (assignResult.isFailure) {
+                return assignResult
+            }
+
+            // 3. Marcar la solicitud como APROBADA
+            requestsCollection.document(request.id).update("estado", "APROBADA").await()
+
+            // 4. Rechazar otras solicitudes pendientes para la misma propiedad
+            val otherRequestsSnapshot = requestsCollection
+                .whereEqualTo("propertyId", request.propertyId)
+                .whereEqualTo("estado", "PENDIENTE")
+                .get()
+                .await()
+
+            for (doc in otherRequestsSnapshot.documents) {
+                if (doc.id != request.id) {
+                    requestsCollection.document(doc.id).update("estado", "RECHAZADA")
+                }
+            }
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun rejectPropertyRequest(requestId: String): Result<Unit> {
+        return try {
+            if (!isCurrentUserAdmin()) {
+                return Result.failure(Exception("Permiso denegado: Solo el Administrador puede rechazar solicitudes."))
+            }
+            requestsCollection.document(requestId).update("estado", "RECHAZADA").await()
+            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }

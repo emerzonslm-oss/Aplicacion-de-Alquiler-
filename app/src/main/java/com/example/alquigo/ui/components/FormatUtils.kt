@@ -126,6 +126,60 @@ fun openWhatsAppReminder(
     }
 }
 
+fun sendReceiptEmail(
+    context: Context,
+    tenantEmail: String,
+    tenantName: String,
+    propertyTitle: String,
+    montoStr: String,
+    concepto: String,
+    fechaPagoReal: String
+) {
+    val cleanEmail = tenantEmail.trim()
+    if (cleanEmail.isBlank()) {
+        android.widget.Toast.makeText(context, "El correo electrónico del inquilino no está registrado.", android.widget.Toast.LENGTH_LONG).show()
+        return
+    }
+
+    val subject = "Comprobante de Pago Confirmado - AlquiGo ($propertyTitle)"
+    val body = """
+        Hola $tenantName,
+
+        Confirmamos la recepción de tu pago correspondiente a la propiedad '$propertyTitle'.
+
+        • Detalle: $concepto
+        • Monto: $montoStr
+        • Fecha de pago: $fechaPagoReal
+        • Estado: PAGADO (Confirmado)
+
+        ¡Muchas gracias por tu pago puntual!
+
+        Atentamente,
+        Administración AlquiGo
+    """.trimIndent()
+
+    try {
+        val encodedSubject = java.net.URLEncoder.encode(subject, "UTF-8").replace("+", "%20")
+        val encodedBody = java.net.URLEncoder.encode(body, "UTF-8").replace("+", "%20")
+        val mailtoUrl = "mailto:$cleanEmail?subject=$encodedSubject&body=$encodedBody"
+
+        val intent = android.content.Intent(android.content.Intent.ACTION_SENDTO, Uri.parse(mailtoUrl))
+        context.startActivity(android.content.Intent.createChooser(intent, "Enviar confirmación por correo"))
+    } catch (e: Exception) {
+        try {
+            val fallbackIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                type = "message/rfc822"
+                putExtra(android.content.Intent.EXTRA_EMAIL, arrayOf(cleanEmail))
+                putExtra(android.content.Intent.EXTRA_SUBJECT, subject)
+                putExtra(android.content.Intent.EXTRA_TEXT, body)
+            }
+            context.startActivity(android.content.Intent.createChooser(fallbackIntent, "Enviar correo al inquilino"))
+        } catch (_: Exception) {
+            android.widget.Toast.makeText(context, "No se pudo abrir ninguna aplicación de correo.", android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+}
+
 fun copyUriToInternalStorage(context: Context, uri: Uri): String {
     return try {
         val inputStream = context.contentResolver.openInputStream(uri) ?: return uri.toString()

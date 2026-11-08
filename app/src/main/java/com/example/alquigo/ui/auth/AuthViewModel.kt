@@ -107,8 +107,7 @@ class AuthViewModel(private val repository: AuthRepository = AuthRepository()) :
         email: String,
         telefono: String,
         contrasena: String,
-        confirmarContrasena: String,
-        rol: String = "PROPIETARIO"
+        confirmarContrasena: String
     ) {
         if (nombre.isBlank() || apellido.isBlank() || email.isBlank() || telefono.isBlank() || contrasena.isBlank()) {
             _authState.value = AuthState.Error("Por favor complete todos los campos")
@@ -139,7 +138,7 @@ class AuthViewModel(private val repository: AuthRepository = AuthRepository()) :
                 apellido = apellido.trim(),
                 email = email.trim(),
                 telefono = telefono.trim(),
-                rol = rol
+                rol = "INQUILINO"
             )
             repository.register(user, contrasena).fold(
                 onSuccess = {

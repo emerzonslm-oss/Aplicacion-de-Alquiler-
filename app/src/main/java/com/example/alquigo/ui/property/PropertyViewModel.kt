@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.alquigo.data.model.DuePaymentInfo
 import com.example.alquigo.data.model.Property
+import com.example.alquigo.data.model.PropertyRequest
 import com.example.alquigo.data.model.TenantRentalInfo
 import com.example.alquigo.data.repository.PropertyRepository
 import com.example.alquigo.data.repository.TenantRepository
@@ -27,7 +28,9 @@ data class PropertyUiState(
     val favoritePropertyIds: Set<String> = emptySet(),
     val metrics: DashboardMetrics = DashboardMetrics(),
     val duePayments: List<DuePaymentInfo> = emptyList(),
-    val tenantRentalInfo: TenantRentalInfo? = null
+    val tenantRentalInfo: TenantRentalInfo? = null,
+    val pendingRequests: List<PropertyRequest> = emptyList(),
+    val tenantRequests: List<PropertyRequest> = emptyList()
 )
 
 class PropertyViewModel(
@@ -247,6 +250,113 @@ class PropertyViewModel(
                 },
                 onFailure = { error ->
                     onError(error.message ?: "Error al enviar el comprobante de pago")
+                }
+            )
+        }
+    }
+
+    // --- SOLICITUDES DE PROPIEDADES ---
+
+    fun loadPendingRequests() {
+        viewModelScope.launch {
+            repository.getAllPendingRequests().fold(
+                onSuccess = { list ->
+                    _uiState.value = _uiState.value.copy(pendingRequests = list)
+                },
+                onFailure = { /* opcional log */ }
+            )
+        }
+    }
+
+    fun loadTenantRequests(tenantUid: String) {
+        if (tenantUid.isBlank()) return
+        viewModelScope.launch {
+            repository.getRequestsForTenant(tenantUid).fold(
+                onSuccess = { list ->
+                    _uiState.value = _uiState.value.copy(tenantRequests = list)
+                },
+                onFailure = { /* opcional log */ }
+            )
+        }
+    }
+
+    fun sendPropertyRequest(
+        property: Property,
+        tenantUid: String,
+        tenantName: String,
+        tenantEmail: String,
+        tenantPhone: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true)
+            val request = PropertyRequest(
+                propertyId = property.id,
+                propertyTitle = property.titulo,
+                propertyTipo = property.tipo,
+                propertyPrecio = property.precio,
+                propertyImagenUri = property.imagenUri,
+                tenantUid = tenantUid,
+                tenantName = tenantName,
+                tenantEmail = tenantEmail,
+                tenantPhone = tenantPhone
+            )
+            repository.createPropertyRequest(request).fold(
+                onSuccess = {
+                    _uiState.value = _uiState.value.copy(isLoading = false)
+                    loadTenantRequests(tenantUid)
+                    onSuccess()
+                },
+                onFailure = { error ->
+                    _uiState.value = _uiState.value.copy(isLoading = false)
+                    onError(error.message ?: "Error al solicitar la propiedad.")
+                }
+            )
+        }
+    }
+
+    fun approveRequest(
+        request: PropertyRequest,
+        fechaInicio: String,
+        fechaFin: String,
+        montoMensual: Double,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true)
+            repository.approvePropertyRequest(request, fechaInicio, fechaFin, montoMensual).fold(
+                onSuccess = {
+                    _uiState.value = _uiState.value.copy(isLoading = false)
+                    loadProperties()
+                    loadPendingRequests()
+                    onSuccess()
+                },
+                onFailure = { error ->
+                    _uiState.value = _uiState.value.copy(isLoading = false)
+                    onError(error.message ?: "Error al aprobar la solicitud.")
+                }
+            )
+        }
+    }
+
+    fun rejectRequest(
+        requestId: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true)
+            repository.rejectPropertyRequest(requestId).fold(
+                onSuccess = {
+                    _uiState.value = _uiState.value.copy(isLoading = false)
+                    loadPendingRequests()
+                    onSuccess()
+                },
+                onFailure = { error ->
+                    _uiState.value = _uiState.value.copy(isLoading = false)
+                    onError(error.message ?: "Error al rechazar la solicitud.")
                 }
             )
         }

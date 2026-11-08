@@ -39,13 +39,21 @@ fun PropertyListScreen(
     val context = LocalContext.current
     val uiState by viewModel.uiState
     val userState by authViewModel?.userState ?: remember { mutableStateOf<User?>(null) }
-    val isOwnerMode = userState?.rol == "PROPIETARIO" || userState?.rol.isNullOrBlank()
+    val isAdmin = userState?.rol == "PROPIETARIO" || userState?.rol == "ADMIN"
 
     val filters = listOf("Todos", "Favoritos", "Casa", "Apartamento", "Habitación", "Local Comercial")
 
     var propertyToDelete by remember { mutableStateOf<Property?>(null) }
     var showDeleteConfirmationDialog by remember { mutableStateOf(false) }
     var blockedMessage by remember { mutableStateOf<String?>(null) }
+
+    val displayedProperties = remember(uiState.properties, isAdmin) {
+        if (isAdmin) {
+            uiState.properties
+        } else {
+            uiState.properties.filter { !it.estado.equals("OCUPADA", ignoreCase = true) }
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.loadProperties()
@@ -107,7 +115,7 @@ fun PropertyListScreen(
                     modifier = Modifier.padding(20.dp)
                 )
             }
-        } else if (uiState.properties.isEmpty()) {
+        } else if (displayedProperties.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -171,7 +179,7 @@ fun PropertyListScreen(
                 contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 120.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                items(uiState.properties, key = { it.id }) { property ->
+                items(displayedProperties, key = { it.id }) { property ->
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = CardShape,
@@ -187,7 +195,7 @@ fun PropertyListScreen(
                                 isFavorite = uiState.favoritePropertyIds.contains(property.id),
                                 onFavoriteClick = { viewModel.toggleFavorite(property.id) }
                             )
-                            if (isOwnerMode) {
+                            if (isAdmin) {
                                 Spacer(modifier = Modifier.height(12.dp))
                                 HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
                                 Spacer(modifier = Modifier.height(4.dp))
