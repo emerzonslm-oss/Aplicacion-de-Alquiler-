@@ -204,6 +204,7 @@ fun PropertyListScreen(
                                     horizontalArrangement = Arrangement.End,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    // 📌 BOTÓN QUE ABRE UNA NUEVA PANTALLA CON INPUTS: Llama a onNavigateToEditProperty que abre la pantalla EditPropertyScreen (la cual dibuja las cajas de texto/inputs prellenados con los datos actuales de la propiedad)
                                     TextButton(
                                         onClick = { onNavigateToEditProperty(property.id) }
                                     ) {
@@ -217,6 +218,8 @@ fun PropertyListScreen(
                                         Text("Editar", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                                     }
                                     Spacer(modifier = Modifier.width(8.dp))
+
+                                    // Botón para Eliminar - Abre el diálogo emergente ConfirmDialog para solicitar la confirmación de eliminación
                                     TextButton(
                                         onClick = {
                                             propertyToDelete = property

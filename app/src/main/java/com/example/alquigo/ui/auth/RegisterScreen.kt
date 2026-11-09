@@ -175,6 +175,7 @@ fun RegisterScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
+                // Botón Principal de Registro - Acción: Registra al nuevo inquilino con los campos del formulario ejecutando viewModel.register(...)
                 PrimaryButton(
                     text = "Registrarme",
                     onClick = {
@@ -193,6 +194,7 @@ fun RegisterScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                // Botón de Texto para Iniciar Sesión - Navega a la pantalla de Login (LoginScreen) llamando a onNavigateToLogin
                 TextButton(onClick = onNavigateToLogin) {
                     Text(
                         text = "¿Ya tienes cuenta? Inicia sesión",

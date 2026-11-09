@@ -108,6 +108,27 @@ class PropertyDetailViewModel(
         }
     }
 
+    fun rejectPaymentVoucher(
+        paymentId: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            val propertyId = _uiState.value.property?.id ?: ""
+            propertyRepository.rejectPaymentVoucher(paymentId).fold(
+                onSuccess = {
+                    if (propertyId.isNotBlank()) {
+                        loadPropertyDetail(propertyId)
+                    }
+                    onSuccess()
+                },
+                onFailure = { error ->
+                    onError(error.message ?: "Error al rechazar comprobante")
+                }
+            )
+        }
+    }
+
     fun renewContract(
         contractId: String,
         nuevaFechaFin: String,

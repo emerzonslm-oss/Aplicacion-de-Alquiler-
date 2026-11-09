@@ -188,6 +188,7 @@ fun AddPropertyScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            // Botón de Guardar - Acción: Guarda la nueva propiedad creada a partir de los Inputs del formulario llamando a viewModel.saveProperty(...)
             PrimaryButton(
                 text = "Registrar Propiedad",
                 onClick = {
@@ -235,6 +236,7 @@ fun AddPropertyScreen(
                 enabled = !uiState.isLoading
             )
 
+            // Botón Limpiar Campos - Acción: Resetea todas las variables de estado de los Inputs a su valor inicial
             OutlinedButton(
                 onClick = {
                     titulo = ""

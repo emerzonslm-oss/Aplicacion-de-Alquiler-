@@ -136,7 +136,7 @@ fun LoginScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Botón Continuar con degradado
+                // Botón Principal de Iniciar Sesión - Acción: Autentica al usuario ejecutando viewModel.login(email, contrasena)
                 PrimaryButton(
                     text = "Continuar",
                     onClick = { viewModel.login(email, contrasena) },
@@ -163,9 +163,7 @@ fun LoginScreen(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-
-
-                // Enlace a Registro
+                // Botón de Texto para Registro - Navega a la pantalla de registro (RegisterScreen) llamando a onNavigateToRegister
                 TextButton(onClick = onNavigateToRegister) {
                     Text(
                         text = "¿No tienes cuenta? Regístrate",

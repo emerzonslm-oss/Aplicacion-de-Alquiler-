@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.HomeWork
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Receipt
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
@@ -70,6 +71,13 @@ fun HomeScreen(
     var approveFechaInicioInput by remember { mutableStateOf(LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))) }
     var approveFechaFinInput by remember { mutableStateOf(LocalDate.now().plusMonths(6).format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))) }
     var approveMontoInput by remember { mutableStateOf("") }
+    var showNotificationsDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(userState?.uid) {
+        if (!userState?.uid.isNullOrBlank()) {
+            propertyViewModel.loadNotifications(userState!!.uid)
+        }
+    }
 
     if (isTenantMode) {
         LaunchedEffect(userEmail, userState?.uid) {
@@ -122,6 +130,51 @@ fun HomeScreen(
             .verticalScroll(rememberScrollState())
             .padding(bottom = 100.dp)
     ) {
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Cabecera con Botón de Notificaciones
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "AlquiGo",
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary
+            )
+
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(CircleShape)
+                    .background(Color.White)
+                    .border(0.5.dp, BorderLight, CircleShape)
+                    .clickable { showNotificationsDialog = true },
+                contentAlignment = Alignment.Center
+            ) {
+                BadgedBox(
+                    badge = {
+                        if (uiState.unreadNotificationsCount > 0) {
+                            Badge(containerColor = AirbnbPrimary) {
+                                Text("${uiState.unreadNotificationsCount}", color = Color.White, fontSize = 10.sp)
+                            }
+                        }
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Notifications,
+                        contentDescription = "Notificaciones",
+                        tint = TextPrimary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(12.dp))
 
         // Barra de Búsqueda Superior (con 24dp de padding horizontal)
@@ -151,7 +204,7 @@ fun HomeScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Botones Discretos "Publicar" y "Ver catálogo"
+        // Botones "Publicar" y "Ver catálogo"
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -159,6 +212,7 @@ fun HomeScreen(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // 📌 BOTÓN QUE ABRE UNA NUEVA PANTALLA CON INPUTS: Llama a onNavigateToAddProperty que abre la pantalla AddPropertyScreen (la cual dibuja las cajas de texto/inputs de título, dirección, precio y descripción)
             PrimaryButton(
                 text = "Publicar",
                 onClick = onNavigateToAddProperty,
@@ -175,6 +229,7 @@ fun HomeScreen(
                 }
             )
 
+            // Botón de Navegación a Catálogo - Abre la pantalla PropertyListScreen con el listado de propiedades
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -521,6 +576,79 @@ fun HomeScreen(
             }
         )
     }
+
+    // Modal de Notificaciones
+    if (showNotificationsDialog) {
+        AlertDialog(
+            onDismissRequest = { showNotificationsDialog = false },
+            shape = CardShape,
+            containerColor = Color.White,
+            title = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Notificaciones", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = TextPrimary)
+                    if (uiState.unreadNotificationsCount > 0) {
+                        Text("${uiState.unreadNotificationsCount} nuevas", fontSize = 12.sp, color = AirbnbPrimary, fontWeight = FontWeight.Bold)
+                    }
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 320.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    if (uiState.notifications.isEmpty()) {
+                        Text("No tienes notificaciones registradas.", fontSize = 14.sp, color = TextSecondary)
+                    } else {
+                        uiState.notifications.forEach { notif ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 8.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (!notif.leida) Color(0xFFFFF8F8) else Color(0xFFF9F9F9)
+                                )
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(notif.titulo, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                        Text(notif.fecha, fontSize = 11.sp, color = TextSecondary)
+                                    }
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(notif.mensaje, fontSize = 13.sp, color = TextSecondary)
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Row(horizontalArrangement = Arrangement.End) {
+                    if (uiState.unreadNotificationsCount > 0) {
+                        TextButton(
+                            onClick = {
+                                propertyViewModel.markNotificationsAsRead(userState?.uid ?: "")
+                            }
+                        ) {
+                            Text("Marcar como leídas", color = AirbnbPrimary, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    TextButton(onClick = { showNotificationsDialog = false }) {
+                        Text("Cerrar", color = TextSecondary, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -607,6 +735,7 @@ fun PendingRequestsAdminSection(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
+                            // Botón de Aprobación de Solicitud - Activa selectedRequestForApproval y dibuja el AlertDialog emergente con los Inputs de fecha e importe
                             Button(
                                 onClick = { onApproveClick(req) },
                                 modifier = Modifier
@@ -618,6 +747,7 @@ fun PendingRequestsAdminSection(
                                 Text("Aceptar", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                             }
 
+                            // Botón de Rechazo - Acción directa que rechaza la solicitud llamando a propertyViewModel.rejectRequest
                             OutlinedButton(
                                 onClick = { onRejectClick(req.id) },
                                 modifier = Modifier
@@ -628,6 +758,7 @@ fun PendingRequestsAdminSection(
                             ) {
                                 Text("Rechazar", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
                             }
+
                         }
                     }
                 }
@@ -880,6 +1011,7 @@ fun DuePaymentsWhatsAppSection(
 
                             Spacer(modifier = Modifier.height(12.dp))
 
+                            // Botón para WhatsApp - Acción: Abre la app de WhatsApp con el mensaje de recordatorio prellenado para la cuota por vencer
                             Button(
                                 onClick = {
                                     openWhatsAppReminder(
@@ -933,6 +1065,7 @@ fun TenantHomeScreenView(
     var tenantVoucherUri by remember { mutableStateOf("") }
     var tenantPaymentDateInput by remember { mutableStateOf(LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))) }
     var selectedTenantVoucherForView by remember { mutableStateOf<String?>(null) }
+    var showTenantNotifications by remember { mutableStateOf(false) }
 
     val tenantVoucherPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -963,26 +1096,56 @@ fun TenantHomeScreenView(
         // Encabezado
         Row(
             modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AvatarInitial(
-                name = user?.nombre?.ifEmpty { "Inquilino" } ?: "Inquilino",
-                size = 50.dp,
-                fontSize = 22
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column {
-                Text(
-                    text = "Mi Alquiler",
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AvatarInitial(
+                    name = user?.nombre?.ifEmpty { "Inquilino" } ?: "Inquilino",
+                    size = 50.dp,
+                    fontSize = 22
                 )
-                Text(
-                    text = "Bienvenido, ${user?.nombre ?: "Inquilino"}",
-                    fontSize = 14.sp,
-                    color = TextSecondary
-                )
+                Spacer(modifier = Modifier.width(16.dp))
+                Column {
+                    Text(
+                        text = "Mi Alquiler",
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = "Bienvenido, ${user?.nombre ?: "Inquilino"}",
+                        fontSize = 14.sp,
+                        color = TextSecondary
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(CircleShape)
+                    .background(Color.White)
+                    .border(0.5.dp, BorderLight, CircleShape)
+                    .clickable { showTenantNotifications = true },
+                contentAlignment = Alignment.Center
+            ) {
+                BadgedBox(
+                    badge = {
+                        if (uiState.unreadNotificationsCount > 0) {
+                            Badge(containerColor = AirbnbPrimary) {
+                                Text("${uiState.unreadNotificationsCount}", color = Color.White, fontSize = 10.sp)
+                            }
+                        }
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Notifications,
+                        contentDescription = "Notificaciones",
+                        tint = TextPrimary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
             }
         }
 
@@ -1102,9 +1265,9 @@ fun TenantHomeScreenView(
                 Column(modifier = Modifier.padding(16.dp)) {
                     PropertyCard(
                         property = property,
-                        onClick = { },
+                        onClick = { onNavigateToPropertyDetail(property.id) },
                         modifier = Modifier.fillMaxWidth(),
-                        estado = "Alquilada"
+                        estado = "ALQUILADO_POR_TI"
                     )
                 }
             }
@@ -1537,6 +1700,79 @@ fun TenantHomeScreenView(
             confirmButton = {
                 TextButton(onClick = { selectedTenantVoucherForView = null }) {
                     Text("Cerrar", fontWeight = FontWeight.Bold, color = AirbnbPrimary)
+                }
+            }
+        )
+    }
+
+    // Modal de Notificaciones para Inquilino
+    if (showTenantNotifications) {
+        AlertDialog(
+            onDismissRequest = { showTenantNotifications = false },
+            shape = CardShape,
+            containerColor = Color.White,
+            title = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Mis Notificaciones", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = TextPrimary)
+                    if (uiState.unreadNotificationsCount > 0) {
+                        Text("${uiState.unreadNotificationsCount} nuevas", fontSize = 12.sp, color = AirbnbPrimary, fontWeight = FontWeight.Bold)
+                    }
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 320.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    if (uiState.notifications.isEmpty()) {
+                        Text("No tienes notificaciones por el momento.", fontSize = 14.sp, color = TextSecondary)
+                    } else {
+                        uiState.notifications.forEach { notif ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 8.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (!notif.leida) Color(0xFFFFF8F8) else Color(0xFFF9F9F9)
+                                )
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(notif.titulo, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                        Text(notif.fecha, fontSize = 11.sp, color = TextSecondary)
+                                    }
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(notif.mensaje, fontSize = 13.sp, color = TextSecondary)
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Row(horizontalArrangement = Arrangement.End) {
+                    if (uiState.unreadNotificationsCount > 0) {
+                        TextButton(
+                            onClick = {
+                                propertyViewModel?.markNotificationsAsRead(user?.uid ?: "")
+                            }
+                        ) {
+                            Text("Marcar como leídas", color = AirbnbPrimary, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    TextButton(onClick = { showTenantNotifications = false }) {
+                        Text("Cerrar", color = TextSecondary, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         )

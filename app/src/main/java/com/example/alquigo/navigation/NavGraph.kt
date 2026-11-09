@@ -55,6 +55,8 @@ sealed class Screen(val route: String) {
     object AddTenant : Screen("add_tenant")
     object Profile : Screen("profile")
     object EditProfile : Screen("edit_profile")
+
+    object prueba : Screen("prueba")
 }
 
 @Composable
@@ -124,12 +126,16 @@ fun NavGraph(
                     hazeState = hazeState
                 )
             }
+
+            // Ruta a Pantalla de Creación de Propiedad con Inputs (AddPropertyScreen)
             composable(Screen.AddProperty.route) {
                 AddPropertyScreen(
                     viewModel = propertyViewModel,
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
+
+            // Ruta a Pantalla de Catálogo de Propiedades (PropertyListScreen)
             composable(Screen.PropertyList.route) {
                 PropertyListScreen(
                     viewModel = propertyViewModel,
@@ -143,6 +149,8 @@ fun NavGraph(
                     }
                 )
             }
+
+            // Ruta a Pantalla de Edición con Parámetros (EditPropertyScreen)
             composable(
                 route = Screen.EditProperty.route,
                 arguments = listOf(navArgument("propertyId") { type = NavType.StringType })
@@ -204,6 +212,7 @@ fun NavGraph(
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
+
         }
 
         // Floating Bottom Bar

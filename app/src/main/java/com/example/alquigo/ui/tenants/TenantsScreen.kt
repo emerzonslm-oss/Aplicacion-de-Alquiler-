@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Group
+import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.Phone
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -57,6 +58,15 @@ fun TenantsScreen(
                 color = TextPrimary
             )
 
+            // 📌 BOTÓN QUE ABRE UNA NUEVA PANTALLA CON INPUTS: Llama a onNavigateToAddTenant que abre AddTenantScreen (donde se dibujan las cajas de texto/inputs para DNI, nombre, teléfono y correo)
+            IconButton(onClick = onNavigateToAddTenant) {
+                Icon(
+                    imageVector = Icons.Outlined.PersonAdd,
+                    contentDescription = "Agregar Inquilino",
+                    tint = AirbnbPrimary,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
         }
 
         if (uiState.isLoading) {

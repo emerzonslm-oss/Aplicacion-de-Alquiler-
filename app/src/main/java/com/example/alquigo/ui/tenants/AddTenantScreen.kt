@@ -88,6 +88,7 @@ fun AddTenantScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            // Botón Registrar Inquilino - Acción: Guarda el nuevo inquilino con los datos ingresados en los Inputs ejecutando viewModel.saveTenant(...)
             PrimaryButton(
                 text = "Registrar Inquilino",
                 onClick = {

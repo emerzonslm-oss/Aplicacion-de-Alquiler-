@@ -282,6 +282,8 @@ fun PropertyDetailScreen(
                                     color = TextSecondary
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
+
+                                // Botón para Solicitar Alquiler - Acción: Envía la solicitud de alquiler de este inquilino al Administrador ejecutando sendPropertyRequest(...)
                                 PrimaryButton(
                                     text = "Solicitar Propiedad",
                                     onClick = {
@@ -337,7 +339,37 @@ fun PropertyDetailScreen(
                     }
                     Spacer(modifier = Modifier.height(24.dp))
                 } else if (isMyAssignedContract) {
-                    // Propiedad Ocupada por ESTE inquilino -> Ver su contrato y sus pagos
+                    // Propiedad Alquilada por ESTE inquilino
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = CardShape,
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9)),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("🏠", fontSize = 28.sp)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "Propiedad Alquilada por Ti",
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF2E7D32)
+                                )
+                                Text(
+                                    text = "Cuentas con un contrato de alquiler activo sobre este inmueble.",
+                                    fontSize = 13.sp,
+                                    color = Color(0xFF1B5E20)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
                     Text(
                         text = "Mi Contrato Vigente",
                         fontSize = 22.sp,
@@ -573,6 +605,8 @@ fun PropertyDetailScreen(
                                 Text(text = "Cuota mensual: ${formatPrecio(contract.montoMensual)}", fontSize = 15.sp, color = TextSecondary)
                             }
                             Spacer(modifier = Modifier.height(14.dp))
+
+                            // Botón de Renovación de Contrato - Activa showRenewContractDialog = true y dibuja el AlertDialog emergente con los Inputs de nueva fecha e importe
                             OutlinedButton(
                                 onClick = {
                                     val currentEnd = contract.fechaFin
@@ -604,6 +638,8 @@ fun PropertyDetailScreen(
                             color = TextSecondary
                         )
                         Spacer(modifier = Modifier.height(16.dp))
+
+                        // 📌 BOTÓN QUE ABRE UNA NUEVA PANTALLA CON INPUTS: Llama a onNavigateToAssignTenant que abre la pantalla AssignTenantScreen (la cual dibuja las cajas de texto/inputs para seleccionar inquilino, fechas de contrato y cuota mensual)
                         PrimaryButton(
                             text = "Asignar Inquilino",
                             onClick = { onNavigateToAssignTenant(property.id) },
@@ -734,6 +770,9 @@ fun PropertyDetailScreen(
 
                     filteredPayments.forEach { payment ->
                         val isPending = payment.estado.equals("PENDIENTE", ignoreCase = true)
+                        val isUnderReview = payment.estado.equals("EN_REVISION", ignoreCase = true)
+                        val isPaid = payment.estado.equals("PAGADO", ignoreCase = true)
+
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -761,11 +800,11 @@ fun PropertyDetailScreen(
                                             fontSize = 14.sp,
                                             color = TextSecondary
                                         )
-                                        if (!isPending && payment.fechaPagoReal.isNotBlank()) {
+                                        if (payment.fechaPagoReal.isNotBlank()) {
                                             Text(
-                                                text = "Pagado el: ${payment.fechaPagoReal}",
+                                                text = if (isPaid) "Pagado el: ${payment.fechaPagoReal}" else "Enviado el: ${payment.fechaPagoReal}",
                                                 fontSize = 13.sp,
-                                                color = PaidStatusText,
+                                                color = if (isPaid) PaidStatusText else PendingStatusText,
                                                 fontWeight = FontWeight.Medium
                                             )
                                         }
@@ -779,14 +818,90 @@ fun PropertyDetailScreen(
                                             color = TextPrimary
                                         )
                                         Spacer(modifier = Modifier.height(4.dp))
-                                        StatusBadge(status = payment.estado)
+                                        StatusBadge(status = if (isUnderReview) "EN REVISIÓN" else payment.estado)
                                     }
                                 }
 
-                                if (isPending) {
+                                if (isUnderReview) {
+                                    // Módulo de Aprobación/Rechazo de Voucher por el Administrador
                                     Spacer(modifier = Modifier.height(12.dp))
                                     HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
                                     Spacer(modifier = Modifier.height(10.dp))
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        if (payment.comprobanteUrl.isNotBlank()) {
+                                            OutlinedButton(
+                                                onClick = { selectedVoucherImageForView = payment.comprobanteUrl },
+                                                modifier = Modifier.weight(1f).height(40.dp),
+                                                shape = InputShape,
+                                                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary)
+                                            ) {
+                                                Text("Ver Foto", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+
+                                        Button(
+                                            onClick = {
+                                                val payId = payment.id
+                                                val payDate = payment.fechaPagoReal.ifBlank { LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) }
+                                                viewModel.markPaymentAsPaid(
+                                                    paymentId = payId,
+                                                    fechaPagoReal = payDate,
+                                                    comprobanteUrl = payment.comprobanteUrl,
+                                                    onSuccess = {
+                                                        Toast.makeText(context, "¡Pago aprobado y confirmado como PAGADO!", Toast.LENGTH_SHORT).show()
+
+                                                        val tenantEmail = uiState.currentTenant?.email ?: ""
+                                                        val tenantName = uiState.currentTenant?.nombre ?: "Inquilino"
+                                                        val propTitle = uiState.property?.titulo ?: "Propiedad"
+                                                        val montoStr = formatPrecio(payment.monto)
+
+                                                        sendReceiptEmail(
+                                                            context = context,
+                                                            tenantEmail = tenantEmail,
+                                                            tenantName = tenantName,
+                                                            propertyTitle = propTitle,
+                                                            montoStr = montoStr,
+                                                            concepto = payment.concepto,
+                                                            fechaPagoReal = payDate
+                                                        )
+                                                    },
+                                                    onError = { err -> Toast.makeText(context, err, Toast.LENGTH_LONG).show() }
+                                                )
+                                            },
+                                            modifier = Modifier.weight(1.2f).height(40.dp),
+                                            shape = InputShape,
+                                            colors = ButtonDefaults.buttonColors(containerColor = AirbnbPrimary)
+                                        ) {
+                                            Text("Aprobar Pago", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        }
+
+                                        OutlinedButton(
+                                            onClick = {
+                                                viewModel.rejectPaymentVoucher(
+                                                    paymentId = payment.id,
+                                                    onSuccess = {
+                                                        Toast.makeText(context, "Comprobante rechazado. Estado restablecido a PENDIENTE.", Toast.LENGTH_SHORT).show()
+                                                    },
+                                                    onError = { err -> Toast.makeText(context, err, Toast.LENGTH_LONG).show() }
+                                                )
+                                            },
+                                            modifier = Modifier.weight(1f).height(40.dp),
+                                            shape = InputShape,
+                                            colors = ButtonDefaults.outlinedButtonColors(contentColor = PendingStatusText)
+                                        ) {
+                                            Text("Rechazar", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                } else if (isPending) {
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    // Botón de Confirmación de Pago - Activa selectedPaymentForPay = payment y dibuja el AlertDialog emergente con los Inputs para fecha real de pago, comprobante y envío de Email
                                     OutlinedButton(
                                         onClick = {
                                             selectedPaymentForPay = payment

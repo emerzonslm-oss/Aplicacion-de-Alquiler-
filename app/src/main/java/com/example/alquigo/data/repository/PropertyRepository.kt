@@ -1,5 +1,6 @@
 package com.example.alquigo.data.repository
 
+import com.example.alquigo.data.model.AppNotification
 import com.example.alquigo.data.model.Contract
 import com.example.alquigo.data.model.ContractHistoryInfo
 import com.example.alquigo.data.model.DuePaymentInfo
@@ -24,9 +25,60 @@ class PropertyRepository {
     private val contractsCollection = firestore.collection("contratos")
     private val paymentsCollection = firestore.collection("pagos")
     private val requestsCollection = firestore.collection("solicitudes")
+    private val notificationsCollection = firestore.collection("notificaciones")
 
     private val currentUserId: String
         get() = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+
+    // --- SISTEMA DE NOTIFICACIONES ---
+
+    suspend fun sendNotification(notification: AppNotification): Result<Unit> {
+        return try {
+            val docRef = notificationsCollection.document()
+            val notifWithId = notification.copy(
+                id = docRef.id,
+                fecha = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+            )
+            docRef.set(notifWithId).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getNotificationsForUser(userId: String): Result<List<AppNotification>> {
+        return try {
+            if (userId.isBlank()) return Result.success(emptyList())
+            val snapshot = notificationsCollection
+                .whereEqualTo("userId", userId)
+                .get()
+                .await()
+            val list = snapshot.toObjects(AppNotification::class.java).sortedByDescending { it.id }
+            Result.success(list)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun markNotificationsAsRead(userId: String): Result<Unit> {
+        return try {
+            if (userId.isBlank()) return Result.success(Unit)
+            val snapshot = notificationsCollection
+                .whereEqualTo("userId", userId)
+                .whereEqualTo("leida", false)
+                .get()
+                .await()
+
+            val batch = firestore.batch()
+            for (doc in snapshot.documents) {
+                batch.update(doc.reference, "leida", true)
+            }
+            batch.commit().await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 
     suspend fun isCurrentUserAdmin(): Boolean {
         if (currentUserId.isBlank()) return false
@@ -191,6 +243,83 @@ class PropertyRepository {
         }
     }
 
+    suspend fun uploadTenantPaymentVoucher(paymentId: String, fechaPagoReal: String, comprobanteUrl: String): Result<Unit> {
+        return try {
+            val updates = mutableMapOf<String, Any>(
+                "estado" to "EN_REVISION",
+                "fechaPagoReal" to fechaPagoReal,
+                "comprobanteUrl" to comprobanteUrl
+            )
+            paymentsCollection.document(paymentId).update(updates).await()
+
+            // Notificar al Administrador/Propietario del inmueble
+            try {
+                val payDoc = paymentsCollection.document(paymentId).get().await()
+                val propId = payDoc.getString("propertyId") ?: ""
+                val monto = payDoc.getDouble("monto") ?: 0.0
+                if (propId.isNotBlank()) {
+                    val propDoc = collection.document(propId).get().await()
+                    val ownerUid = propDoc.getString("userId") ?: ""
+                    val propTitle = propDoc.getString("titulo") ?: "la propiedad"
+                    if (ownerUid.isNotBlank()) {
+                        sendNotification(
+                            AppNotification(
+                                userId = ownerUid,
+                                titulo = "Nuevo Comprobante de Pago",
+                                mensaje = "Un inquilino subió un comprobante de pago (S/ ${monto.toInt()}) para '$propTitle'.",
+                                tipo = "PAGO",
+                                relatedId = paymentId
+                            )
+                        )
+                    }
+                }
+            } catch (_: Exception) {}
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun rejectPaymentVoucher(paymentId: String): Result<Unit> {
+        return try {
+            val updates = mutableMapOf<String, Any>(
+                "estado" to "PENDIENTE",
+                "fechaPagoReal" to "",
+                "comprobanteUrl" to ""
+            )
+            paymentsCollection.document(paymentId).update(updates).await()
+
+            // Notificar al Inquilino
+            try {
+                val payDoc = paymentsCollection.document(paymentId).get().await()
+                val contractId = payDoc.getString("contractId") ?: ""
+                if (contractId.isNotBlank()) {
+                    val contractDoc = contractsCollection.document(contractId).get().await()
+                    val tenantId = contractDoc.getString("tenantId") ?: ""
+                    val propId = contractDoc.getString("propertyId") ?: ""
+                    val propDoc = collection.document(propId).get().await()
+                    val propTitle = propDoc.getString("titulo") ?: "la propiedad"
+                    if (tenantId.isNotBlank()) {
+                        sendNotification(
+                            AppNotification(
+                                userId = tenantId,
+                                titulo = "Comprobante Rechazado",
+                                mensaje = "Tu comprobante de pago para '$propTitle' fue rechazado. Por favor envía uno válido.",
+                                tipo = "PAGO",
+                                relatedId = paymentId
+                            )
+                        )
+                    }
+                }
+            } catch (_: Exception) {}
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun markPaymentAsPaid(paymentId: String, fechaPagoReal: String, comprobanteUrl: String = ""): Result<Unit> {
         return try {
             val updates = mutableMapOf<String, Any>(
@@ -201,6 +330,32 @@ class PropertyRepository {
                 updates["comprobanteUrl"] = comprobanteUrl
             }
             paymentsCollection.document(paymentId).update(updates).await()
+
+            // Notificar al Inquilino de que su pago fue APROBADO
+            try {
+                val payDoc = paymentsCollection.document(paymentId).get().await()
+                val contractId = payDoc.getString("contractId") ?: ""
+                val monto = payDoc.getDouble("monto") ?: 0.0
+                if (contractId.isNotBlank()) {
+                    val contractDoc = contractsCollection.document(contractId).get().await()
+                    val tenantId = contractDoc.getString("tenantId") ?: ""
+                    val propId = contractDoc.getString("propertyId") ?: ""
+                    val propDoc = collection.document(propId).get().await()
+                    val propTitle = propDoc.getString("titulo") ?: "la propiedad"
+                    if (tenantId.isNotBlank()) {
+                        sendNotification(
+                            AppNotification(
+                                userId = tenantId,
+                                titulo = "¡Pago Aprobado!",
+                                mensaje = "Tu pago de S/ ${monto.toInt()} para '$propTitle' fue APROBADO por el Administrador.",
+                                tipo = "PAGO",
+                                relatedId = paymentId
+                            )
+                        )
+                    }
+                }
+            } catch (_: Exception) {}
+
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -533,6 +688,24 @@ class PropertyRepository {
                 estado = "PENDIENTE"
             )
             docRef.set(requestWithId).await()
+
+            // Notificar al Administrador de la nueva solicitud
+            try {
+                val propDoc = collection.document(request.propertyId).get().await()
+                val ownerUid = propDoc.getString("userId") ?: ""
+                if (ownerUid.isNotBlank()) {
+                    sendNotification(
+                        AppNotification(
+                            userId = ownerUid,
+                            titulo = "Nueva Solicitud de Alquiler",
+                            mensaje = "El usuario ${request.tenantName} envió una solicitud para '${request.propertyTitle}'.",
+                            tipo = "SOLICITUD",
+                            relatedId = requestWithId.id
+                        )
+                    )
+                }
+            } catch (_: Exception) {}
+
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -628,6 +801,17 @@ class PropertyRepository {
             // 3. Marcar la solicitud como APROBADA
             requestsCollection.document(request.id).update("estado", "APROBADA").await()
 
+            // Notificar al Inquilino
+            sendNotification(
+                AppNotification(
+                    userId = request.tenantUid,
+                    titulo = "¡Solicitud Aprobada!",
+                    mensaje = "Tu solicitud de alquiler para '${request.propertyTitle}' fue APROBADA por el Administrador.",
+                    tipo = "SOLICITUD",
+                    relatedId = request.propertyId
+                )
+            )
+
             // 4. Rechazar otras solicitudes pendientes para la misma propiedad
             val otherRequestsSnapshot = requestsCollection
                 .whereEqualTo("propertyId", request.propertyId)
@@ -652,7 +836,24 @@ class PropertyRepository {
             if (!isCurrentUserAdmin()) {
                 return Result.failure(Exception("Permiso denegado: Solo el Administrador puede rechazar solicitudes."))
             }
+            val reqDoc = requestsCollection.document(requestId).get().await()
+            val tenantUid = reqDoc.getString("tenantUid") ?: ""
+            val propTitle = reqDoc.getString("propertyTitle") ?: "la propiedad"
+
             requestsCollection.document(requestId).update("estado", "RECHAZADA").await()
+
+            if (tenantUid.isNotBlank()) {
+                sendNotification(
+                    AppNotification(
+                        userId = tenantUid,
+                        titulo = "Solicitud Rechazada",
+                        mensaje = "Tu solicitud de alquiler para '$propTitle' no fue aprobada.",
+                        tipo = "SOLICITUD",
+                        relatedId = requestId
+                    )
+                )
+            }
+
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)

@@ -149,7 +149,7 @@ fun ProfileScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Configuración de la cuenta
+        // 📌 BOTÓN/OPCIÓN QUE ABRE UNA NUEVA PANTALLA CON INPUTS: Al hacer clic en Configuración de la cuenta llama a onNavigateToEditProfile que abre la pantalla EditProfileScreen (donde se dibujan las cajas de texto/inputs para modificar el nombre, apellido y teléfono)
         Row(
             modifier = Modifier
                 .fillMaxWidth()

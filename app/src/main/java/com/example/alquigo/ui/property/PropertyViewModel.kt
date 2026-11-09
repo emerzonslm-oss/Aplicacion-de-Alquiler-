@@ -4,6 +4,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.alquigo.data.model.AppNotification
 import com.example.alquigo.data.model.DuePaymentInfo
 import com.example.alquigo.data.model.Property
 import com.example.alquigo.data.model.PropertyRequest
@@ -30,7 +31,9 @@ data class PropertyUiState(
     val duePayments: List<DuePaymentInfo> = emptyList(),
     val tenantRentalInfo: TenantRentalInfo? = null,
     val pendingRequests: List<PropertyRequest> = emptyList(),
-    val tenantRequests: List<PropertyRequest> = emptyList()
+    val tenantRequests: List<PropertyRequest> = emptyList(),
+    val notifications: List<AppNotification> = emptyList(),
+    val unreadNotificationsCount: Int = 0
 )
 
 class PropertyViewModel(
@@ -241,7 +244,7 @@ class PropertyViewModel(
         onError: (String) -> Unit
     ) {
         viewModelScope.launch {
-            repository.markPaymentAsPaid(paymentId, fechaPagoReal, comprobanteUrl).fold(
+            repository.uploadTenantPaymentVoucher(paymentId, fechaPagoReal, comprobanteUrl).fold(
                 onSuccess = {
                     if (userEmail.isNotBlank()) {
                         loadTenantRentalInfo(userEmail)
@@ -251,6 +254,54 @@ class PropertyViewModel(
                 onFailure = { error ->
                     onError(error.message ?: "Error al enviar el comprobante de pago")
                 }
+            )
+        }
+    }
+
+    fun rejectPaymentVoucher(
+        paymentId: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            repository.rejectPaymentVoucher(paymentId).fold(
+                onSuccess = {
+                    loadProperties()
+                    onSuccess()
+                },
+                onFailure = { error ->
+                    onError(error.message ?: "Error al rechazar comprobante")
+                }
+            )
+        }
+    }
+
+    // --- NOTIFICACIONES ---
+
+    fun loadNotifications(userId: String) {
+        if (userId.isBlank()) return
+        viewModelScope.launch {
+            repository.getNotificationsForUser(userId).fold(
+                onSuccess = { list ->
+                    val unread = list.count { !it.leida }
+                    _uiState.value = _uiState.value.copy(
+                        notifications = list,
+                        unreadNotificationsCount = unread
+                    )
+                },
+                onFailure = { /* opcional log */ }
+            )
+        }
+    }
+
+    fun markNotificationsAsRead(userId: String) {
+        if (userId.isBlank()) return
+        viewModelScope.launch {
+            repository.markNotificationsAsRead(userId).fold(
+                onSuccess = {
+                    loadNotifications(userId)
+                },
+                onFailure = { /* opcional log */ }
             )
         }
     }

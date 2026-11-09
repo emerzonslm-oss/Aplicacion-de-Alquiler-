@@ -109,14 +109,24 @@ fun PropertyCard(
                 }
             }
 
-            // Insignia: Píldora BLANCA sólida en esquina superior izquierda
+            // Insignia: Píldora en esquina superior izquierda
             if (!estado.isNullOrBlank()) {
-                val statusText = if (estado.equals("OCUPADA", ignoreCase = true) || estado.equals("ACTIVO", ignoreCase = true)) "Ocupada" else "Disponible"
+                val isMyProperty = estado.equals("ALQUILADO_POR_TI", ignoreCase = true) || estado.equals("MI_PROPIEDAD", ignoreCase = true) || estado.equals("Alquilada", ignoreCase = true)
+                val isOccupied = estado.equals("OCUPADA", ignoreCase = true) || estado.equals("ACTIVO", ignoreCase = true)
+
+                val statusText = when {
+                    isMyProperty -> "Alquilado por ti"
+                    isOccupied -> "Ocupada"
+                    else -> "Disponible"
+                }
+                val badgeBg = if (isMyProperty) Color(0xFFE8F5E9) else Color.White
+                val badgeTextColor = if (isMyProperty) Color(0xFF2E7D32) else TextPrimary
+
                 Box(
                     modifier = Modifier
                         .padding(top = 10.dp, start = 10.dp)
                         .clip(CircleShape)
-                        .background(Color.White)
+                        .background(badgeBg)
                         .border(0.5.dp, BorderLight, CircleShape)
                         .padding(horizontal = 10.dp, vertical = 5.dp)
                 ) {
@@ -124,7 +134,7 @@ fun PropertyCard(
                         text = statusText,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        color = badgeTextColor
                     )
                 }
             }
