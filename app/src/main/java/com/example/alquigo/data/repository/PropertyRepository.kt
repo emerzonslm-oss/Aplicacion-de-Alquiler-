@@ -80,6 +80,46 @@ class PropertyRepository {
         }
     }
 
+    suspend fun resolvePropertyIdFromNotification(notif: AppNotification): String {
+        val relId = notif.relatedId.trim()
+        if (relId.isBlank()) return ""
+
+        return try {
+            // 1. Si relId es directamente el ID de una propiedad existente
+            val propDoc = collection.document(relId).get().await()
+            if (propDoc.exists()) {
+                return relId
+            }
+
+            // 2. Si relId es el ID de un pago (notificaciones antiguas)
+            val payDoc = paymentsCollection.document(relId).get().await()
+            if (payDoc.exists()) {
+                val propIdFromPay = payDoc.getString("propertyId") ?: ""
+                if (propIdFromPay.isNotBlank()) return propIdFromPay
+
+                val contractId = payDoc.getString("contractId") ?: ""
+                if (contractId.isNotBlank()) {
+                    val contractDoc = contractsCollection.document(contractId).get().await()
+                    if (contractDoc.exists()) {
+                        val propIdFromContract = contractDoc.getString("propertyId") ?: ""
+                        if (propIdFromContract.isNotBlank()) return propIdFromContract
+                    }
+                }
+            }
+
+            // 3. Si relId es el ID de una solicitud (notificaciones antiguas)
+            val reqDoc = requestsCollection.document(relId).get().await()
+            if (reqDoc.exists()) {
+                val propIdFromReq = reqDoc.getString("propertyId") ?: ""
+                if (propIdFromReq.isNotBlank()) return propIdFromReq
+            }
+
+            ""
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
     suspend fun isCurrentUserAdmin(): Boolean {
         if (currentUserId.isBlank()) return false
         return try {
@@ -248,7 +288,8 @@ class PropertyRepository {
             val updates = mutableMapOf<String, Any>(
                 "estado" to "EN_REVISION",
                 "fechaPagoReal" to fechaPagoReal,
-                "comprobanteUrl" to comprobanteUrl
+                "comprobanteUrl" to comprobanteUrl,
+                "comentarioRechazo" to ""
             )
             paymentsCollection.document(paymentId).update(updates).await()
 
@@ -268,7 +309,7 @@ class PropertyRepository {
                                 titulo = "Nuevo Comprobante de Pago",
                                 mensaje = "Un inquilino subió un comprobante de pago (S/ ${monto.toInt()}) para '$propTitle'.",
                                 tipo = "PAGO",
-                                relatedId = paymentId
+                                relatedId = propId
                             )
                         )
                     }
@@ -281,12 +322,13 @@ class PropertyRepository {
         }
     }
 
-    suspend fun rejectPaymentVoucher(paymentId: String): Result<Unit> {
+    suspend fun rejectPaymentVoucher(paymentId: String, comentario: String = ""): Result<Unit> {
         return try {
             val updates = mutableMapOf<String, Any>(
                 "estado" to "PENDIENTE",
                 "fechaPagoReal" to "",
-                "comprobanteUrl" to ""
+                "comprobanteUrl" to "",
+                "comentarioRechazo" to comentario
             )
             paymentsCollection.document(paymentId).update(updates).await()
 
@@ -301,13 +343,18 @@ class PropertyRepository {
                     val propDoc = collection.document(propId).get().await()
                     val propTitle = propDoc.getString("titulo") ?: "la propiedad"
                     if (tenantId.isNotBlank()) {
+                        val mensajeNotif = if (comentario.isNotBlank()) {
+                            "Tu comprobante de pago para '$propTitle' fue rechazado. Motivo: $comentario"
+                        } else {
+                            "Tu comprobante de pago para '$propTitle' fue rechazado. Por favor envía uno válido."
+                        }
                         sendNotification(
                             AppNotification(
                                 userId = tenantId,
                                 titulo = "Comprobante Rechazado",
-                                mensaje = "Tu comprobante de pago para '$propTitle' fue rechazado. Por favor envía uno válido.",
+                                mensaje = mensajeNotif,
                                 tipo = "PAGO",
-                                relatedId = paymentId
+                                relatedId = propId
                             )
                         )
                     }
@@ -324,7 +371,8 @@ class PropertyRepository {
         return try {
             val updates = mutableMapOf<String, Any>(
                 "estado" to "PAGADO",
-                "fechaPagoReal" to fechaPagoReal
+                "fechaPagoReal" to fechaPagoReal,
+                "comentarioRechazo" to ""
             )
             if (comprobanteUrl.isNotBlank()) {
                 updates["comprobanteUrl"] = comprobanteUrl
@@ -349,7 +397,7 @@ class PropertyRepository {
                                 titulo = "¡Pago Aprobado!",
                                 mensaje = "Tu pago de S/ ${monto.toInt()} para '$propTitle' fue APROBADO por el Administrador.",
                                 tipo = "PAGO",
-                                relatedId = paymentId
+                                relatedId = propId
                             )
                         )
                     }
@@ -839,6 +887,7 @@ class PropertyRepository {
             val reqDoc = requestsCollection.document(requestId).get().await()
             val tenantUid = reqDoc.getString("tenantUid") ?: ""
             val propTitle = reqDoc.getString("propertyTitle") ?: "la propiedad"
+            val propId = reqDoc.getString("propertyId") ?: ""
 
             requestsCollection.document(requestId).update("estado", "RECHAZADA").await()
 
@@ -849,7 +898,7 @@ class PropertyRepository {
                         titulo = "Solicitud Rechazada",
                         mensaje = "Tu solicitud de alquiler para '$propTitle' no fue aprobada.",
                         tipo = "SOLICITUD",
-                        relatedId = requestId
+                        relatedId = propId
                     )
                 )
             }

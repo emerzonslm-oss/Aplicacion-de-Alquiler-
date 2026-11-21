@@ -8,6 +8,12 @@ import com.example.alquigo.data.model.TenantRentalInfo
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 
+data class TenantItemInfo(
+    val tenant: Tenant = Tenant(),
+    val propertyId: String = "",
+    val propertyTitle: String = ""
+)
+
 class TenantRepository {
     private val firestore = FirebaseFirestore.getInstance()
     private val collection = firestore.collection("inquilinos")
@@ -17,6 +23,39 @@ class TenantRepository {
             val snapshot = collection.get().await()
             val tenants = snapshot.toObjects(Tenant::class.java)
             Result.success(tenants)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getAllTenantsWithProperty(): Result<List<TenantItemInfo>> {
+        return try {
+            val tenantsSnapshot = collection.get().await()
+            val tenants = tenantsSnapshot.toObjects(Tenant::class.java)
+
+            val contractsSnapshot = firestore.collection("contratos")
+                .whereEqualTo("estado", "ACTIVO")
+                .get()
+                .await()
+            val activeContracts = contractsSnapshot.toObjects(Contract::class.java)
+
+            val propertiesSnapshot = firestore.collection("propiedades").get().await()
+            val propertiesMap = propertiesSnapshot.documents.associate { doc ->
+                doc.id to (doc.getString("titulo") ?: "Propiedad")
+            }
+
+            val tenantInfoList = tenants.map { tenant ->
+                val contract = activeContracts.find { it.tenantId == tenant.id }
+                val propId = contract?.propertyId ?: ""
+                val propTitle = if (propId.isNotBlank()) propertiesMap[propId] ?: "Propiedad Asignada" else ""
+                TenantItemInfo(
+                    tenant = tenant,
+                    propertyId = propId,
+                    propertyTitle = propTitle
+                )
+            }
+
+            Result.success(tenantInfoList)
         } catch (e: Exception) {
             Result.failure(e)
         }

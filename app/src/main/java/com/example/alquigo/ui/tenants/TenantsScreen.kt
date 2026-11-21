@@ -2,12 +2,15 @@ package com.example.alquigo.ui.tenants
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Group
+import androidx.compose.material.icons.outlined.HomeWork
 import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.Phone
 import androidx.compose.material3.*
@@ -20,7 +23,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.alquigo.ui.components.AvatarInitial
-import com.example.alquigo.ui.components.PrimaryButton
 import com.example.alquigo.ui.theme.*
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
@@ -28,6 +30,7 @@ import dev.chrisbanes.haze.hazeSource
 @Composable
 fun TenantsScreen(
     onNavigateToAddTenant: () -> Unit,
+    onNavigateToPropertyDetail: (String) -> Unit = {},
     hazeState: HazeState? = null,
     viewModel: TenantViewModel = viewModel()
 ) {
@@ -58,7 +61,6 @@ fun TenantsScreen(
                 color = TextPrimary
             )
 
-            // 📌 BOTÓN QUE ABRE UNA NUEVA PANTALLA CON INPUTS: Llama a onNavigateToAddTenant que abre AddTenantScreen (donde se dibujan las cajas de texto/inputs para DNI, nombre, teléfono y correo)
             IconButton(onClick = onNavigateToAddTenant) {
                 Icon(
                     imageVector = Icons.Outlined.PersonAdd,
@@ -109,11 +111,18 @@ fun TenantsScreen(
                 contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 120.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                items(uiState.tenants, key = { it.id }) { tenant ->
+                items(uiState.tenants, key = { it.tenant.id }) { itemInfo ->
+                    val tenant = itemInfo.tenant
+                    val hasProperty = itemInfo.propertyId.isNotBlank()
+
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .border(1.dp, BorderLight, CardShape),
+                            .border(1.dp, BorderLight, CardShape)
+                            .then(
+                                if (hasProperty) Modifier.clickable { onNavigateToPropertyDetail(itemInfo.propertyId) }
+                                else Modifier
+                            ),
                         shape = CardShape,
                         colors = CardDefaults.cardColors(containerColor = Color.White),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -154,6 +163,36 @@ fun TenantsScreen(
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(text = tenant.email, fontSize = 14.sp, color = TextSecondary)
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+                                if (hasProperty) {
+                                    Row(
+                                        modifier = Modifier
+                                            .background(AirbnbPrimary.copy(alpha = 0.08f), shape = RoundedCornerShape(8.dp))
+                                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.HomeWork,
+                                            contentDescription = null,
+                                            tint = AirbnbPrimary,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "🏠 ${itemInfo.propertyTitle}",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = AirbnbPrimary
+                                        )
+                                    }
+                                } else {
+                                    Text(
+                                        text = "Sin propiedad asignada",
+                                        fontSize = 12.sp,
+                                        color = TextSecondary
+                                    )
                                 }
                             }
                         }

@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.HomeWork
@@ -609,7 +610,20 @@ fun HomeScreen(
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(bottom = 8.dp),
+                                    .padding(bottom = 8.dp)
+                                    .clickable {
+                                        showNotificationsDialog = false
+                                        if (uiState.unreadNotificationsCount > 0) {
+                                            propertyViewModel.markNotificationsAsRead(userState?.uid ?: "")
+                                        }
+                                        propertyViewModel.handleNotificationClick(notif) { targetPropId ->
+                                            if (targetPropId.isNotBlank()) {
+                                                onNavigateToPropertyDetail(targetPropId)
+                                            } else {
+                                                Toast.makeText(context, "No se encontró la propiedad asociada a esta notificación.", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    },
                                 shape = RoundedCornerShape(10.dp),
                                 colors = CardDefaults.cardColors(
                                     containerColor = if (!notif.leida) Color(0xFFFFF8F8) else Color(0xFFF9F9F9)
@@ -618,13 +632,29 @@ fun HomeScreen(
                                 Column(modifier = Modifier.padding(12.dp)) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(notif.titulo, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
                                         Text(notif.fecha, fontSize = 11.sp, color = TextSecondary)
                                     }
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(notif.mensaje, fontSize = 13.sp, color = TextSecondary)
+                                    if (notif.relatedId.isNotBlank()) {
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.End,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text(
+                                                text = "Ver detalle ›",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = AirbnbPrimary
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1434,6 +1464,31 @@ fun TenantHomeScreenView(
                             }
                         }
 
+                        if (payment.comentarioRechazo.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color(0xFFFFF0F0), shape = RoundedCornerShape(8.dp))
+                                    .padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = "Motivo",
+                                    tint = Color(0xFFD32F2F),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Motivo de rechazo: ${payment.comentarioRechazo}",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFFD32F2F),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+
                         if (isPending) {
                             Spacer(modifier = Modifier.height(12.dp))
                             HorizontalDivider(color = BorderLight, thickness = 0.5.dp)
@@ -1737,7 +1792,21 @@ fun TenantHomeScreenView(
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(bottom = 8.dp),
+                                    .padding(bottom = 8.dp)
+                                    .clickable {
+                                        showTenantNotifications = false
+                                        if (uiState.unreadNotificationsCount > 0) {
+                                            propertyViewModel?.markNotificationsAsRead(user?.uid ?: "")
+                                        }
+                                        val tenantPropId = uiState.tenantRentalInfo?.property?.id ?: ""
+                                        propertyViewModel?.handleNotificationClick(notif, fallbackPropertyId = tenantPropId) { targetPropId ->
+                                            if (targetPropId.isNotBlank()) {
+                                                onNavigateToPropertyDetail(targetPropId)
+                                            } else {
+                                                Toast.makeText(context, "No se encontró la propiedad asociada a esta notificación.", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    },
                                 shape = RoundedCornerShape(10.dp),
                                 colors = CardDefaults.cardColors(
                                     containerColor = if (!notif.leida) Color(0xFFFFF8F8) else Color(0xFFF9F9F9)
@@ -1746,13 +1815,30 @@ fun TenantHomeScreenView(
                                 Column(modifier = Modifier.padding(12.dp)) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(notif.titulo, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
                                         Text(notif.fecha, fontSize = 11.sp, color = TextSecondary)
                                     }
                                     Spacer(modifier = Modifier.height(2.dp))
                                     Text(notif.mensaje, fontSize = 13.sp, color = TextSecondary)
+                                    val hasTarget = notif.relatedId.isNotBlank() || !uiState.tenantRentalInfo?.property?.id.isNullOrBlank()
+                                    if (hasTarget) {
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.End,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text(
+                                                text = "Ver detalle ›",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = AirbnbPrimary
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }

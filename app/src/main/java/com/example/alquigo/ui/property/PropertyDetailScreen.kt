@@ -15,6 +15,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.outlined.CheckCircle
 
 import androidx.compose.material.icons.outlined.Email
@@ -79,6 +81,29 @@ fun PropertyDetailScreen(
     var showRenewContractDialog by remember { mutableStateOf(false) }
     var renewFechaFinInput by remember { mutableStateOf("") }
     var renewMontoInput by remember { mutableStateOf("") }
+
+    var selectedPaymentToReject by remember { mutableStateOf<Payment?>(null) }
+    var rejectCommentInput by remember { mutableStateOf("") }
+
+    fun showDatePickerForRenew(currentValue: String, minDateStr: String) {
+        val initialDate = parseFlexibleDate(currentValue) ?: parseFlexibleDate(minDateStr) ?: LocalDate.now()
+        val dialog = android.app.DatePickerDialog(
+            context,
+            { _, year, month, dayOfMonth ->
+                val selectedDate = LocalDate.of(year, month + 1, dayOfMonth)
+                renewFechaFinInput = selectedDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+            },
+            initialDate.year,
+            initialDate.monthValue - 1,
+            initialDate.dayOfMonth
+        )
+        parseFlexibleDate(minDateStr)?.let { minDate ->
+            val zoneId = java.time.ZoneId.systemDefault()
+            val minEpoch = minDate.plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli()
+            dialog.datePicker.minDate = minEpoch
+        }
+        dialog.show()
+    }
 
     var selectedRequestForApproval by remember { mutableStateOf<PropertyRequest?>(null) }
     var approveFechaInicioInput by remember { mutableStateOf(LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))) }
@@ -822,6 +847,31 @@ fun PropertyDetailScreen(
                                     }
                                 }
 
+                                if (payment.comentarioRechazo.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(Color(0xFFFFF0F0), shape = RoundedCornerShape(8.dp))
+                                            .padding(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Info,
+                                            contentDescription = "Motivo",
+                                            tint = Color(0xFFD32F2F),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "Motivo de rechazo: ${payment.comentarioRechazo}",
+                                            fontSize = 12.sp,
+                                            color = Color(0xFFD32F2F),
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+
                                 if (isUnderReview) {
                                     // Módulo de Aprobación/Rechazo de Voucher por el Administrador
                                     Spacer(modifier = Modifier.height(12.dp))
@@ -881,13 +931,8 @@ fun PropertyDetailScreen(
 
                                         OutlinedButton(
                                             onClick = {
-                                                viewModel.rejectPaymentVoucher(
-                                                    paymentId = payment.id,
-                                                    onSuccess = {
-                                                        Toast.makeText(context, "Comprobante rechazado. Estado restablecido a PENDIENTE.", Toast.LENGTH_SHORT).show()
-                                                    },
-                                                    onError = { err -> Toast.makeText(context, err, Toast.LENGTH_LONG).show() }
-                                                )
+                                                selectedPaymentToReject = payment
+                                                rejectCommentInput = ""
                                             },
                                             modifier = Modifier.weight(1f).height(40.dp),
                                             shape = InputShape,
@@ -1096,7 +1141,88 @@ fun PropertyDetailScreen(
         )
     }
 
-    // Modal para Renovar Contrato
+    // Modal para Rechazar Comprobante con Comentario
+    if (selectedPaymentToReject != null) {
+        val paymentToReject = selectedPaymentToReject!!
+        AlertDialog(
+            onDismissRequest = { selectedPaymentToReject = null },
+            shape = CardShape,
+            containerColor = Color.White,
+            title = {
+                Text(
+                    text = "Rechazar Comprobante",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = TextPrimary
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Ingrese el motivo o comentario del rechazo. El inquilino verá este mensaje para corregir su comprobante.",
+                        fontSize = 14.sp,
+                        color = TextSecondary
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    AlquiTextField(
+                        value = rejectCommentInput,
+                        onValueChange = { rejectCommentInput = it },
+                        label = "Motivo del rechazo (ej: Monto incorrecto)"
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf("Monto incorrecto", "Imagen borrosa", "Comprobante no válido").forEach { reason ->
+                            OutlinedButton(
+                                onClick = { rejectCommentInput = reason },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Text(reason, fontSize = 11.sp, color = TextPrimary)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = { selectedPaymentToReject = null }) {
+                        Text("Cancelar", color = TextSecondary, fontWeight = FontWeight.SemiBold)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            val comment = rejectCommentInput.trim()
+                            val payId = paymentToReject.id
+                            selectedPaymentToReject = null
+                            viewModel.rejectPaymentVoucher(
+                                paymentId = payId,
+                                comentario = comment,
+                                onSuccess = {
+                                    Toast.makeText(context, "Comprobante rechazado. Notificación enviada.", Toast.LENGTH_SHORT).show()
+                                },
+                                onError = { err ->
+                                    Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                                }
+                            )
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
+                        shape = ButtonShape
+                    ) {
+                        Text("Confirmar Rechazo", fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                }
+            }
+        )
+    }
+
+    // Modal para Renovar Contrato con Control de Calendario
     if (showRenewContractDialog && uiState.activeContract != null) {
         val activeContract = uiState.activeContract!!
         AlertDialog(
@@ -1119,11 +1245,63 @@ fun PropertyDetailScreen(
                         color = TextSecondary
                     )
                     Spacer(modifier = Modifier.height(12.dp))
-                    AlquiTextField(
-                        value = renewFechaFinInput,
-                        onValueChange = { renewFechaFinInput = it },
-                        label = "Nueva Fecha de Fin (AAAA-MM-DD)"
-                    )
+
+                    Text("Nueva Fecha de Fin:", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(modifier = Modifier.weight(1f)) {
+                            AlquiTextField(
+                                value = renewFechaFinInput,
+                                onValueChange = { renewFechaFinInput = it },
+                                label = "Fecha Fin (AAAA-MM-DD)"
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        IconButton(
+                            onClick = {
+                                showDatePickerForRenew(
+                                    currentValue = renewFechaFinInput,
+                                    minDateStr = activeContract.fechaFin
+                                )
+                            },
+                            modifier = Modifier
+                                .size(48.dp)
+                                .background(AirbnbPrimary.copy(alpha = 0.1f), shape = RoundedCornerShape(12.dp))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.DateRange,
+                                contentDescription = "Seleccionar fecha de fin",
+                                tint = AirbnbPrimary
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        val endBase = parseFlexibleDate(activeContract.fechaFin) ?: LocalDate.now()
+                        listOf(
+                            "+3 Meses" to endBase.plusMonths(3),
+                            "+6 Meses" to endBase.plusMonths(6),
+                            "+1 Año" to endBase.plusYears(1)
+                        ).forEach { (label, calculatedDate) ->
+                            OutlinedButton(
+                                onClick = {
+                                    renewFechaFinInput = calculatedDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+                                },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Text(label, fontSize = 11.sp, color = TextPrimary)
+                            }
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(12.dp))
                     AlquiTextField(
                         value = renewMontoInput,
@@ -1150,11 +1328,21 @@ fun PropertyDetailScreen(
                             val montoDouble = renewMontoInput.trim().toDoubleOrNull()
 
                             if (cleanDate.isBlank()) {
-                                Toast.makeText(context, "Ingrese la nueva fecha de fin.", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Ingrese o seleccione la nueva fecha de fin.", Toast.LENGTH_SHORT).show()
                                 return@Button
                             }
-                            if (parseFlexibleDate(cleanDate) == null) {
+                            val endDate = parseFlexibleDate(cleanDate)
+                            if (endDate == null) {
                                 Toast.makeText(context, "Formato de fecha inválido (AAAA-MM-DD).", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            val currentEnd = parseFlexibleDate(activeContract.fechaFin)
+                            if (currentEnd != null && !endDate.isAfter(currentEnd)) {
+                                Toast.makeText(
+                                    context,
+                                    "La nueva fecha ($cleanDate) debe ser posterior a la fecha de fin actual (${activeContract.fechaFin}).",
+                                    Toast.LENGTH_LONG
+                                ).show()
                                 return@Button
                             }
                             if (montoDouble == null || montoDouble <= 0) {

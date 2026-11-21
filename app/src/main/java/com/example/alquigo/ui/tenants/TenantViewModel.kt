@@ -5,12 +5,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.alquigo.data.model.Tenant
+import com.example.alquigo.data.repository.TenantItemInfo
 import com.example.alquigo.data.repository.TenantRepository
 import kotlinx.coroutines.launch
 
 data class TenantUiState(
     val isLoading: Boolean = false,
-    val tenants: List<Tenant> = emptyList(),
+    val tenants: List<TenantItemInfo> = emptyList(),
     val errorMessage: String? = null
 )
 
@@ -24,7 +25,7 @@ class TenantViewModel(
     fun loadTenants() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-            repository.getAllTenants().fold(
+            repository.getAllTenantsWithProperty().fold(
                 onSuccess = { list ->
                     _uiState.value = _uiState.value.copy(isLoading = false, tenants = list)
                 },

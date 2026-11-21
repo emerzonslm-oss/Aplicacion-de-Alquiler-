@@ -260,11 +260,12 @@ class PropertyViewModel(
 
     fun rejectPaymentVoucher(
         paymentId: String,
+        comentario: String = "",
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
         viewModelScope.launch {
-            repository.rejectPaymentVoucher(paymentId).fold(
+            repository.rejectPaymentVoucher(paymentId, comentario).fold(
                 onSuccess = {
                     loadProperties()
                     onSuccess()
@@ -303,6 +304,20 @@ class PropertyViewModel(
                 },
                 onFailure = { /* opcional log */ }
             )
+        }
+    }
+
+    fun handleNotificationClick(
+        notif: AppNotification,
+        fallbackPropertyId: String = "",
+        onResolved: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            var targetPropId = repository.resolvePropertyIdFromNotification(notif)
+            if (targetPropId.isBlank() && fallbackPropertyId.isNotBlank()) {
+                targetPropId = fallbackPropertyId
+            }
+            onResolved(targetPropId)
         }
     }
 

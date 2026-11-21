@@ -191,6 +191,9 @@ fun NavGraph(
             composable(Screen.Tenants.route) {
                 TenantsScreen(
                     onNavigateToAddTenant = { navController.navigate(Screen.AddTenant.route) },
+                    onNavigateToPropertyDetail = { propertyId ->
+                        navController.navigate(Screen.PropertyDetail.createRoute(propertyId))
+                    },
                     hazeState = hazeState
                 )
             }

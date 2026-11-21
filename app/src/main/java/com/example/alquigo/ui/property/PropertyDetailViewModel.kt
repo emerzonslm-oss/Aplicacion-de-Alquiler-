@@ -110,12 +110,13 @@ class PropertyDetailViewModel(
 
     fun rejectPaymentVoucher(
         paymentId: String,
+        comentario: String = "",
         onSuccess: () -> Unit,
         onError: (String) -> Unit
     ) {
         viewModelScope.launch {
             val propertyId = _uiState.value.property?.id ?: ""
-            propertyRepository.rejectPaymentVoucher(paymentId).fold(
+            propertyRepository.rejectPaymentVoucher(paymentId, comentario).fold(
                 onSuccess = {
                     if (propertyId.isNotBlank()) {
                         loadPropertyDetail(propertyId)

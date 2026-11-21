@@ -9,5 +9,6 @@ data class Payment(
     val fechaPagoReal: String = "",
     val comprobanteUrl: String = "",
     val estado: String = "PENDIENTE", // "PENDIENTE", "PAGADO"
-    val concepto: String = "Mensualidad"
+    val concepto: String = "Mensualidad",
+    val comentarioRechazo: String = ""
 )
